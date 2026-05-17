@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="96" viewBox="0 0 480 96">
+  <!-- Dark background -->
+  <rect width="480" height="96" fill="#14532D"/>
+  <!-- Icon background (lighter green) -->
+  <rect x="12" y="12" width="72" height="72" rx="16" fill="#16A34A"/>
+  <!-- Leaf icon -->
+  <g transform="translate(30, 30) scale(1.5)" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
+    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+  </g>
+  <!-- Wordmark text -->
+  <text x="100" y="52" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="44" font-weight="900" letter-spacing="-1">
+    <tspan fill="white">Eco Quest</tspan>
+  </text>
+  <!-- Tagline -->
+  <text x="101" y="72" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="500" fill="rgba(255,255,255,0.5)" letter-spacing="0.5">Clean the world. Earn rewards.</text>
+</svg>

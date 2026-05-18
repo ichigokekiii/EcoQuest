@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader';
 
+import LocationSearchInput from './LocationSearchInput';
+import { reverseGeocodeLocation } from '../services/geocoding';
+
 const DEFAULT_CENTER = { lat: 14.6096, lng: 120.9904 };
 
 let googleMapsLoadPromise = null;
@@ -16,14 +19,10 @@ function loadGoogleMaps(apiKey) {
     setOptions({
       key: apiKey,
       v: 'weekly',
-      libraries: ['places', 'geometry'],
+      libraries: ['geometry'],
     });
 
-    googleMapsLoadPromise = Promise.all([
-      importLibrary('maps'),
-      importLibrary('places'),
-      importLibrary('geometry'),
-    ]);
+    googleMapsLoadPromise = Promise.all([importLibrary('maps'), importLibrary('geometry')]);
   }
 
   return googleMapsLoadPromise;
@@ -57,10 +56,6 @@ export default function RouteMapPicker({
   const endMarkerRef = useRef(null);
   const directionsRendererRef = useRef(null);
   const directionsServiceRef = useRef(null);
-  const startAutocompleteRef = useRef(null);
-  const endAutocompleteRef = useRef(null);
-  const startInputRef = useRef(null);
-  const endInputRef = useRef(null);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const activePinModeRef = useRef('start');
@@ -107,31 +102,29 @@ export default function RouteMapPicker({
         lng: parseCoordinate(nextValue.endLng, DEFAULT_CENTER.lng + 0.01),
       };
 
-      if (!options.skipReverseGeocode && window.google?.maps?.Geocoder) {
-        const geocoder = new window.google.maps.Geocoder();
+      if (!options.skipReverseGeocode) {
         const reverseTargets = [];
 
         if (partialUpdate.startLat !== undefined || partialUpdate.startLng !== undefined) {
-          reverseTargets.push(['startLocationName', origin]);
+          reverseTargets.push(['startLocationName', origin.lat, origin.lng]);
         }
 
         if (partialUpdate.endLat !== undefined || partialUpdate.endLng !== undefined) {
-          reverseTargets.push(['endLocationName', destination]);
+          reverseTargets.push(['endLocationName', destination.lat, destination.lng]);
         }
 
         await Promise.all(
-          reverseTargets.map(
-            ([fieldName, location]) =>
-              new Promise((resolve) => {
-                geocoder.geocode({ location }, (results, status) => {
-                  if (status === 'OK' && results[0]) {
-                    nextValue[fieldName] = results[0].formatted_address;
-                  }
+          reverseTargets.map(async ([fieldName, lat, lng]) => {
+            try {
+              const result = await reverseGeocodeLocation(lat, lng);
 
-                  resolve();
-                });
-              })
-          )
+              if (result.address) {
+                nextValue[fieldName] = result.address;
+              }
+            } catch {
+              // Keep coordinates even if reverse geocoding fails.
+            }
+          })
         );
       }
 
@@ -250,50 +243,6 @@ export default function RouteMapPicker({
         startMarkerRef.current = startMarker;
         endMarkerRef.current = endMarker;
 
-        if (!isReadOnly && startInputRef.current) {
-          startAutocompleteRef.current = new window.google.maps.places.Autocomplete(
-            startInputRef.current,
-            { fields: ['geometry', 'name', 'formatted_address'] }
-          );
-          startAutocompleteRef.current.bindTo('bounds', map);
-          startAutocompleteRef.current.addListener('place_changed', () => {
-            const place = startAutocompleteRef.current.getPlace();
-            if (!place.geometry?.location) {
-              return;
-            }
-
-            startMarker.setPosition(place.geometry.location);
-            updateRouteFromMarkers({
-              startLat: place.geometry.location.lat(),
-              startLng: place.geometry.location.lng(),
-              startLocationName:
-                place.name || place.formatted_address || valueRef.current.startLocationName,
-            });
-          });
-        }
-
-        if (!isReadOnly && endInputRef.current) {
-          endAutocompleteRef.current = new window.google.maps.places.Autocomplete(
-            endInputRef.current,
-            { fields: ['geometry', 'name', 'formatted_address'] }
-          );
-          endAutocompleteRef.current.bindTo('bounds', map);
-          endAutocompleteRef.current.addListener('place_changed', () => {
-            const place = endAutocompleteRef.current.getPlace();
-            if (!place.geometry?.location) {
-              return;
-            }
-
-            endMarker.setPosition(place.geometry.location);
-            updateRouteFromMarkers({
-              endLat: place.geometry.location.lat(),
-              endLng: place.geometry.location.lng(),
-              endLocationName:
-                place.name || place.formatted_address || valueRef.current.endLocationName,
-            });
-          });
-        }
-
         if (!isReadOnly) {
           startMarker.addListener('dragend', () => {
             const position = startMarker.getPosition();
@@ -358,99 +307,51 @@ export default function RouteMapPicker({
 
     startMarkerRef.current.setPosition({ lat: startLat, lng: startLng });
     endMarkerRef.current.setPosition({ lat: endLat, lng: endLng });
+  }, [mapReady, value.endLat, value.endLng, value.startLat, value.startLng]);
 
-    if (startInputRef.current && value.startLocationName) {
-      startInputRef.current.value = value.startLocationName;
-    }
+  function handleLocationSelect(type, suggestion) {
+    const marker = type === 'start' ? startMarkerRef.current : endMarkerRef.current;
 
-    if (endInputRef.current && value.endLocationName) {
-      endInputRef.current.value = value.endLocationName;
-    }
-  }, [
-    mapReady,
-    value.endLat,
-    value.endLng,
-    value.startLat,
-    value.startLng,
-    value.startLocationName,
-    value.endLocationName,
-  ]);
+    marker?.setPosition({ lat: suggestion.lat, lng: suggestion.lng });
 
-  function handleSearchKeyDown(event, type) {
-    if (readOnly || event.key !== 'Enter') {
-      return;
-    }
-
-    event.preventDefault();
-
-    const input = type === 'start' ? startInputRef.current : endInputRef.current;
-    const address = input?.value?.trim();
-
-    if (!address || !window.google?.maps?.Geocoder) {
-      return;
-    }
-
-    const geocoder = new window.google.maps.Geocoder();
-
-    geocoder.geocode({ address }, (results, status) => {
-      if (status !== 'OK' || !results?.[0]?.geometry?.location) {
-        setRoutingMessage('Could not find that location. Try a different search.');
-        return;
-      }
-
-      const location = results[0].geometry.location;
-      const marker = type === 'start' ? startMarkerRef.current : endMarkerRef.current;
-
-      marker?.setPosition(location);
-
-      updateRouteFromMarkersRef.current?.({
+    updateRouteFromMarkersRef.current?.(
+      {
         ...(type === 'start'
           ? {
-              startLat: location.lat(),
-              startLng: location.lng(),
-              startLocationName: results[0].formatted_address,
+              startLat: suggestion.lat,
+              startLng: suggestion.lng,
+              startLocationName: suggestion.description,
             }
           : {
-              endLat: location.lat(),
-              endLng: location.lng(),
-              endLocationName: results[0].formatted_address,
+              endLat: suggestion.lat,
+              endLng: suggestion.lng,
+              endLocationName: suggestion.description,
             }),
-      });
-    });
+      },
+      { skipReverseGeocode: true }
+    );
   }
 
   const searchFields = (
     <div
-      className={
-        layout === 'overlay' ? 'route-map-search-overlay' : 'route-map-search-grid'
-      }
+      className={layout === 'overlay' ? 'route-map-search-overlay' : 'route-map-search-grid'}
     >
-      <label className="field route-map-search-field">
-        <span className="route-map-search-label">Starting Location</span>
-        <input
-          autoComplete="off"
-          defaultValue={value.startLocationName}
-          disabled={readOnly}
-          onFocus={() => setActivePinMode('start')}
-          onKeyDown={(event) => handleSearchKeyDown(event, 'start')}
-          placeholder="Search where the route begins"
-          readOnly={readOnly}
-          ref={startInputRef}
-        />
-      </label>
-      <label className="field route-map-search-field">
-        <span className="route-map-search-label">End Location</span>
-        <input
-          autoComplete="off"
-          defaultValue={value.endLocationName}
-          disabled={readOnly}
-          onFocus={() => setActivePinMode('end')}
-          onKeyDown={(event) => handleSearchKeyDown(event, 'end')}
-          placeholder="Search where the route ends"
-          readOnly={readOnly}
-          ref={endInputRef}
-        />
-      </label>
+      <LocationSearchInput
+        disabled={readOnly}
+        label="Starting Location"
+        onFocus={() => setActivePinMode('start')}
+        onSelect={(suggestion) => handleLocationSelect('start', suggestion)}
+        placeholder="Search where the route begins"
+        value={value.startLocationName}
+      />
+      <LocationSearchInput
+        disabled={readOnly}
+        label="End Location"
+        onFocus={() => setActivePinMode('end')}
+        onSelect={(suggestion) => handleLocationSelect('end', suggestion)}
+        placeholder="Search where the route ends"
+        value={value.endLocationName}
+      />
     </div>
   );
 
@@ -502,9 +403,7 @@ export default function RouteMapPicker({
       ) : null}
 
       {mapError && layout === 'overlay' ? (
-        <div className="route-map-stage route-map-stage-error">
-          {searchFields}
-        </div>
+        <div className="route-map-stage route-map-stage-error">{searchFields}</div>
       ) : null}
 
       {routingMessage ? <p className="muted route-map-status">{routingMessage}</p> : null}

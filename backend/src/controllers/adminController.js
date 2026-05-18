@@ -5,6 +5,7 @@ const {
   attachRewardRedemptionStats,
   listRedemptions,
 } = require('../services/redemptionService');
+const { reverseGeocode, searchLocations } = require('../services/geocodingService');
 
 function parseLimit(rawLimit, fallback = 10) {
   const limit = Number.parseInt(rawLimit, 10);
@@ -835,6 +836,24 @@ async function updateAdminReward(req, res, next) {
   }
 }
 
+async function searchAdminLocations(req, res, next) {
+  try {
+    const result = await searchLocations(req.query.q);
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function reverseGeocodeAdminLocation(req, res, next) {
+  try {
+    const result = await reverseGeocode(req.query.lat, req.query.lng);
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   createAdminMission,
   createAdminReward,
@@ -850,6 +869,8 @@ module.exports = {
   listAdminRoutes,
   listAdminRouteSessions,
   listAdminTrashSubmissions,
+  reverseGeocodeAdminLocation,
+  searchAdminLocations,
   updateAdminMission,
   updateAdminReward,
   updateAdminRoute,

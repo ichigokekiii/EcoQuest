@@ -15,6 +15,8 @@ const {
   listAdminTrashSubmissions,
   listAdminUsers,
   listAdminRoutes,
+  reverseGeocodeAdminLocation,
+  searchAdminLocations,
   updateAdminMission,
   updateAdminReward,
   updateAdminRoute,
@@ -45,6 +47,20 @@ router.patch(
   updateAdminUserStatus
 );
 router.get('/routes', verifyFirebaseToken, authMiddleware, adminMiddleware, listAdminRoutes);
+router.get(
+  '/locations/search',
+  verifyFirebaseToken,
+  authMiddleware,
+  adminMiddleware,
+  searchAdminLocations
+);
+router.get(
+  '/locations/reverse',
+  verifyFirebaseToken,
+  authMiddleware,
+  adminMiddleware,
+  reverseGeocodeAdminLocation
+);
 router.post('/routes', verifyFirebaseToken, authMiddleware, adminMiddleware, createAdminRoute);
 router.patch('/routes/:routeId', verifyFirebaseToken, authMiddleware, adminMiddleware, updateAdminRoute);
 router.delete(

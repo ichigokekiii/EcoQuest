@@ -53,6 +53,24 @@ test('admin route delete enforces auth and admin middleware', () => {
   ]);
 });
 
+test('admin location search enforces auth and admin middleware', () => {
+  assert.deepEqual(getRouteStack('/locations/search'), [
+    'verifyFirebaseToken',
+    'authMiddleware',
+    'adminMiddleware',
+    'searchAdminLocations',
+  ]);
+});
+
+test('admin location reverse geocode enforces auth and admin middleware', () => {
+  assert.deepEqual(getRouteStack('/locations/reverse'), [
+    'verifyFirebaseToken',
+    'authMiddleware',
+    'adminMiddleware',
+    'reverseGeocodeAdminLocation',
+  ]);
+});
+
 test('admin redemptions route enforces auth and admin middleware', () => {
   assert.deepEqual(getRouteStack('/redemptions'), [
     'verifyFirebaseToken',

@@ -4,9 +4,53 @@ import { GoogleLogin } from "@react-oauth/google";
 import axios from "axios";
 
 function HomePage({ onLoginSuccess }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // ── Regular username/password login ──────────────────────────────
+  const handleSignIn = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!username.trim() || !password.trim()) {
+      setError("Please enter your username and password.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post(
+        "http://localhost/ecoquest/api/index.php?endpoint=login",
+        { username: username.trim(), password },
+        { headers: { "Content-Type": "application/json" } },
+      );
+
+      if (response.data.success) {
+        if (response.data.token) {
+          localStorage.setItem("authToken", response.data.token);
+        }
+        onLoginSuccess(response.data.user);
+      } else {
+        setError(response.data.message || "Invalid username or password.");
+      }
+    } catch (err) {
+      if (err.response) {
+        setError(
+          err.response.data?.message || "Login failed. Please try again.",
+        );
+      } else if (err.request) {
+        setError("Could not reach the server. Is XAMPP running?");
+      } else {
+        setError("An unexpected error occurred.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Google OAuth login ────────────────────────────────────────────
   const handleGoogleSuccess = async (credentialResponse) => {
     setError(null);
     setLoading(true);
@@ -32,7 +76,6 @@ function HomePage({ onLoginSuccess }) {
         );
       }
     } catch (err) {
-      console.error("Backend communication error:", err);
       if (err.response) {
         setError(
           `Server error ${err.response.status}: ${err.response.data?.message || "Authentication failed."}`,
@@ -50,7 +93,6 @@ function HomePage({ onLoginSuccess }) {
   };
 
   const handleGoogleError = () => {
-    console.error("Google Login Initialization Failed");
     setError("Google sign-in failed to initialize. Check your Client ID.");
   };
 
@@ -89,17 +131,73 @@ function HomePage({ onLoginSuccess }) {
           Sign in to access the dashboard
         </p>
 
+        {/* Username / Password form */}
+        <form className="login-form" onSubmit={handleSignIn}>
+          <input
+            className="login-input"
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            disabled={loading}
+          />
+          <input
+            className="login-input"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            disabled={loading}
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              padding: "11px",
+              borderRadius: 10,
+              border: "none",
+              background: loading ? "#8aab8e" : "#5a8a64",
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: "0.95rem",
+              cursor: loading ? "not-allowed" : "pointer",
+              transition: "background 180ms ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {loading ? (
+              <>
+                <svg
+                  style={{
+                    width: 16,
+                    height: 16,
+                    animation: "eq-spin 0.7s linear infinite",
+                  }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
+                </svg>
+                Signing in…
+              </>
+            ) : (
+              "Sign in"
+            )}
+          </button>
+        </form>
+
         {/* Divider */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            margin: "4px 0",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div
-            style={{ flex: 1, height: 1, background: "rgba(120,150,120,0.15)" }}
+            style={{ flex: 1, height: 1, background: "rgba(120,150,120,0.18)" }}
           />
           <span
             style={{
@@ -111,53 +209,23 @@ function HomePage({ onLoginSuccess }) {
             OR
           </span>
           <div
-            style={{ flex: 1, height: 1, background: "rgba(120,150,120,0.15)" }}
+            style={{ flex: 1, height: 1, background: "rgba(120,150,120,0.18)" }}
           />
         </div>
 
-        {/* Google Login button */}
-        {loading ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              padding: "10px 0",
-              color: "#4d7a5a",
-              fontSize: "0.9rem",
-            }}
-          >
-            <svg
-              style={{
-                width: 18,
-                height: 18,
-                animation: "spin 0.7s linear infinite",
-              }}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-              <path d="M12 2a10 10 0 0 1 10 10" />
-            </svg>
-            Verifying your account…
-          </div>
-        ) : (
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={handleGoogleError}
-              useOneTap
-              theme="outline"
-              shape="rectangular"
-              size="large"
-              text="signin_with"
-              width="260"
-            />
-          </div>
-        )}
+        {/* Google Login */}
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={handleGoogleError}
+            useOneTap
+            theme="outline"
+            shape="rectangular"
+            size="large"
+            text="signin_with"
+            width="260"
+          />
+        </div>
 
         {/* Error message */}
         {error && (
@@ -178,9 +246,8 @@ function HomePage({ onLoginSuccess }) {
         )}
       </div>
 
-      {/* Spinner keyframe */}
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes eq-spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

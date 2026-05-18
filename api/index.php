@@ -265,6 +265,79 @@ elseif ($endpoint === 'submissions') {
         http_response_code(405);
         echo json_encode(["message" => "Method Not Allowed for notification checks."]);
     }
+} elseif ($endpoint === 'login') {
+    if ($method !== 'POST') {
+        http_response_code(405);
+        echo json_encode(["success" => false, "message" => "Method not allowed."]);
+        return;
+    }
+
+    $body = json_decode(file_get_contents("php://input"), true);
+    $username = trim($body['username'] ?? '');
+    $password = $body['password'] ?? '';
+
+    if (empty($username) || empty($password)) {
+        http_response_code(400);
+        echo json_encode(["success" => false, "message" => "Username and password are required."]);
+        return;
+    }
+
+    try {
+        // Look up user by username
+        $stmt = $dbConn->prepare(
+            "SELECT id, username, email, password_hash, role, status, image_url, points
+             FROM users
+             WHERE username = :username
+             LIMIT 1"
+        );
+        $stmt->execute([':username' => $username]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Verify user exists and password matches
+        if (!$user || !password_verify($password, $user['password_hash'])) {
+            http_response_code(401);
+            echo json_encode(["success" => false, "message" => "Invalid username or password."]);
+            return;
+        }
+
+        // Block inactive accounts
+        if (strtolower($user['status']) !== 'active') {
+            http_response_code(403);
+            echo json_encode(["success" => false, "message" => "Your account is inactive. Contact an administrator."]);
+            return;
+        }
+
+        // Build safe user object (never send password_hash to frontend)
+        $safeUser = [
+            "id" => $user['id'],
+            "username" => $user['username'],
+            "email" => $user['email'],
+            "role" => $user['role'],
+            "status" => $user['status'],
+            "picture" => $user['image_url'],
+            "points" => $user['points'],
+            "name" => $user['username'],
+        ];
+
+        // Simple session token (replace with a real JWT library in production)
+        $token = base64_encode(json_encode([
+            "sub" => $user['id'],
+            "email" => $user['email'],
+            "role" => $user['role'],
+            "iat" => time(),
+            "exp" => time() + 60 * 60 * 8,
+        ]));
+
+        echo json_encode([
+            "success" => true,
+            "token" => $token,
+            "user" => $safeUser,
+        ]);
+
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(["success" => false, "message" => "Database error: " . $e->getMessage()]);
+    }
 }
 
 // Final fallback wrapper logic (Keep this exactly as you had it)

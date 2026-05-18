@@ -12,6 +12,7 @@ export default function EcoQuestChatBubble({
   actionLabel,
   onAction,
   showAction = true,
+  actions,
   style,
 }) {
   return (
@@ -47,7 +48,8 @@ export default function EcoQuestChatBubble({
               )
             ) : null}
             {footer ? <View style={styles.footer}>{footer}</View> : null}
-            {showAction && actionLabel && onAction ? (
+            {actions ? <View style={styles.actionsWrap}>{actions}</View> : null}
+            {!actions && showAction && actionLabel && onAction ? (
               <TouchableOpacity style={styles.actionButton} onPress={onAction} activeOpacity={0.8}>
                 <Text style={styles.actionText}>{actionLabel}</Text>
               </TouchableOpacity>
@@ -119,6 +121,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: spacing.sm,
+  },
+  actionsWrap: {
+    marginTop: spacing.md,
   },
   actionButton: {
     alignSelf: 'flex-start',

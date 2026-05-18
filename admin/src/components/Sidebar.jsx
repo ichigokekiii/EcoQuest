@@ -5,6 +5,7 @@ const navItems = [
   { to: '/users', label: 'Users', icon: 'users' },
   { to: '/routes', label: 'Routes', icon: 'route' },
   { to: '/missions', label: 'Missions', icon: 'mission' },
+  { to: '/categories', label: 'Trash Categories', icon: 'category' },
   { to: '/verification', label: 'Trash Reviews', icon: 'check' },
   { to: '/rewards', label: 'Rewards', icon: 'award' },
 ];
@@ -41,6 +42,12 @@ function Icon({ name }) {
           <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-8 13-4-4 1.4-1.4 2.6 2.6 5.6-5.6L18 9l-7 7Z" />
         </svg>
       );
+    case 'category':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" />
+        </svg>
+      );
     case 'award':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -52,11 +59,33 @@ function Icon({ name }) {
   }
 }
 
-export default function Sidebar({ onLogout }) {
+function getDisplayName(profile, firebaseUser) {
+  return profile?.fullName || firebaseUser?.displayName || firebaseUser?.email || 'Admin User';
+}
+
+function getInitials(value) {
+  return (value || 'A')
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function formatRole(profile) {
+  if (profile?.role === 'admin') {
+    return 'Administrator';
+  }
+
+  return profile?.role || 'User';
+}
+
+export default function Sidebar({ adminProfile, currentUser, onLogout }) {
+  const displayName = getDisplayName(adminProfile, currentUser);
   return (
     <aside className="sidebar">
       <div className="brand-block">
-        <img alt="Eco Quest" className="brand-mark-img" src="/eco-logo.svg" />
+        <img alt="Eco Quest" className="brand-mark-img" src="/eco-logo-mint.svg" />
         <div>
           <p className="brand-name">Eco Quest</p>
           <p className="brand-role">Admin Console</p>
@@ -83,10 +112,10 @@ export default function Sidebar({ onLogout }) {
 
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <span className="profile-avatar">A</span>
+          <span className="profile-avatar">{getInitials(displayName)}</span>
           <div>
-            <p className="sidebar-user-name">Admin User</p>
-            <p className="sidebar-user-role">Super Admin</p>
+            <p className="sidebar-user-name">{displayName}</p>
+            <p className="sidebar-user-role">{formatRole(adminProfile)}</p>
           </div>
           <button
             aria-label="Logout"

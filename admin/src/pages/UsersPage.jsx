@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import Header from '../components/Header';
+import IconActionButton from '../components/IconActionButton';
+import PageStatRow from '../components/PageStatRow';
+import PointsValue from '../components/PointsValue';
+import StatCard from '../components/StatCard';
+import StatusBadge from '../components/StatusBadge';
+import TableToolbar from '../components/TableToolbar';
 import api from '../services/api';
 
-const filters = ['All Users', 'Admins Only', 'Suspended'];
+const roleFilters = ['All', 'Admin', 'User'];
+const statusFilters = ['All', 'Active', 'Inactive', 'Suspended'];
 
 function getDisplayName(user) {
   return user.fullName || user.name || user.username || user.email || 'Unknown User';
@@ -18,152 +25,181 @@ function getInitials(value) {
     .slice(0, 2);
 }
 
+function getHandle(user) {
+  const handle = user.username || user.email?.split('@')[0] || user.id?.slice(0, 8) || 'user';
+  return `@${handle}`;
+}
+
+function formatJoined(value) {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+}
+
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('All Users');
+  const [tableSearch, setTableSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  async function loadUsers() {
+    try {
+      setLoading(true);
+      setErrorMessage('');
+      const response = await api.get('/admin/users?limit=50');
+      setUsers(response.data.users || []);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Unable to load users.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadUsers() {
-      try {
-        setLoading(true);
-        setErrorMessage('');
-        const response = await api.get('/admin/users?limit=50');
-
-        if (isMounted) {
-          setUsers(response.data.users || []);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setErrorMessage(error.response?.data?.message || 'Unable to load users.');
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
     loadUsers();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
-      const searchText = `${getDisplayName(user)} ${user.email || ''}`.toLowerCase();
-      const matchesSearch = searchText.includes(searchQuery.toLowerCase());
+      const searchText = `${getDisplayName(user)} ${user.email || ''} ${getHandle(user)}`.toLowerCase();
+      const matchesSearch = searchText.includes(tableSearch.toLowerCase());
+      const matchesRole =
+        roleFilter === 'All' || String(user.role || 'user').toLowerCase() === roleFilter.toLowerCase();
+      const matchesStatus =
+        statusFilter === 'All' ||
+        String(user.status || 'active').toLowerCase() === statusFilter.toLowerCase();
 
-      if (!matchesSearch) {
-        return false;
-      }
-
-      if (activeFilter === 'Admins Only') {
-        return user.role === 'admin';
-      }
-
-      if (activeFilter === 'Suspended') {
-        return user.status === 'suspended' || user.status === 'banned';
-      }
-
-      return true;
+      return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [activeFilter, searchQuery, users]);
+  }, [roleFilter, statusFilter, tableSearch, users]);
+
+  async function handleRoleChange(user, role) {
+    try {
+      const response = await api.patch(`/admin/users/${user.id}/role`, { role });
+      setUsers((currentUsers) =>
+        currentUsers.map((item) => (item.id === user.id ? response.data.user : item))
+      );
+      setSuccessMessage(`${getDisplayName(user)} is now ${role}.`);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Unable to update user role.');
+    }
+  }
+
+  async function handleStatusChange(user, status) {
+    try {
+      const response = await api.patch(`/admin/users/${user.id}/status`, { status });
+      setUsers((currentUsers) =>
+        currentUsers.map((item) => (item.id === user.id ? response.data.user : item))
+      );
+      setSuccessMessage(`${getDisplayName(user)} status updated to ${status}.`);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Unable to update user status.');
+    }
+  }
+
+  function handleExportUsers() {
+    const headers = ['id', 'fullName', 'email', 'role', 'status', 'points', 'routesCompleted', 'createdAt'];
+    const rows = filteredUsers.map((user) =>
+      headers
+        .map((header) => `"${String(user[header] ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'ecoquest-users.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+    setSuccessMessage('Exported current user list to CSV.');
+  }
 
   return (
     <section className="users-page">
       <Header
+        subtitle={`${users.length.toLocaleString()} total registered users`}
         title="User Management"
-        subtitle={`${users.length} total registered users`}
-        searchPlaceholder="Search users..."
-        searchValue={searchQuery}
-        onSearchChange={(event) => setSearchQuery(event.target.value)}
-        actions={<button className="filled-action" type="button">+ Add User</button>}
       />
 
-      <section className="stats-grid">
-        <article className="stat-card">
-          <div className="stat-card-body">
-            <span className="stat-icon blue">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-8 2c-3.9 0-7 2.2-7 5v1h14v-1c0-2.8-3.1-5-7-5Z" fill="currentColor" /></svg>
-            </span>
-            <div className="stat-card-content">
-              <strong>{users.length}</strong>
-              <p>Total Users</p>
-            </div>
-          </div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-card-body">
-            <span className="stat-icon green">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" fill="none" stroke="currentColor" strokeWidth="2" /></svg>
-            </span>
-            <div className="stat-card-content">
-              <strong>{users.filter((u) => u.status === 'active' || !u.status).length}</strong>
-              <p>Active</p>
-            </div>
-          </div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-card-body">
-            <span className="stat-icon yellow">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" fill="none" stroke="currentColor" strokeWidth="2" /></svg>
-            </span>
-            <div className="stat-card-content">
-              <strong>{users.filter((u) => u.status === 'inactive').length}</strong>
-              <p>Inactive</p>
-            </div>
-          </div>
-        </article>
-        <article className="stat-card">
-          <div className="stat-card-body">
-            <span className="stat-icon red">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" fill="none" stroke="currentColor" strokeWidth="2" /></svg>
-            </span>
-            <div className="stat-card-content">
-              <strong>{users.filter((u) => u.status === 'suspended' || u.status === 'banned').length}</strong>
-              <p>Suspended</p>
-            </div>
-          </div>
-        </article>
-      </section>
+      <PageStatRow>
+        <StatCard label="Total Users" tone="blue" value={users.length.toLocaleString()} />
+        <StatCard
+          label="Admins"
+          tone="green"
+          value={users.filter((user) => user.role === 'admin').length}
+        />
+        <StatCard
+          label="Active"
+          tone="green"
+          value={users.filter((user) => user.status === 'active' || !user.status).length}
+        />
+        <StatCard
+          label="Suspended"
+          tone="red"
+          value={users.filter((user) => user.status === 'suspended').length}
+        />
+      </PageStatRow>
 
-      <section className="toolbar-row">
+      {errorMessage ? <p className="error">{errorMessage}</p> : null}
+      {successMessage ? <p className="success">{successMessage}</p> : null}
+
+      <section className="data-card">
+        <TableToolbar
+          actions={
+            <button className="outline-action" onClick={handleExportUsers} type="button">
+              Export CSV
+            </button>
+          }
+          onSearchChange={(event) => setTableSearch(event.target.value)}
+          searchPlaceholder="Filter users..."
+          searchValue={tableSearch}
+        />
+
         <div className="filter-pills">
-          {filters.map((filter) => (
+          {roleFilters.map((filter) => (
             <button
-              className={`filter-pill${activeFilter === filter ? ' active' : ''}`}
+              className={`filter-pill${roleFilter === filter ? ' active' : ''}`}
               key={filter}
-              onClick={() => setActiveFilter(filter)}
+              onClick={() => setRoleFilter(filter)}
+              type="button"
+            >
+              {filter}
+            </button>
+          ))}
+          {statusFilters.map((filter) => (
+            <button
+              className={`filter-pill${statusFilter === filter ? ' active' : ''}`}
+              key={`status-${filter}`}
+              onClick={() => setStatusFilter(filter)}
               type="button"
             >
               {filter}
             </button>
           ))}
         </div>
-        <p className="muted">Showing {filteredUsers.length} of {users.length} users</p>
-      </section>
 
-      {errorMessage ? <p className="error">{errorMessage}</p> : null}
-
-      <section className="data-card">
         {loading ? (
           <p className="loading-state">Loading users...</p>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Avatar</th>
                 <th>User</th>
+                <th>Email</th>
                 <th>Role</th>
                 <th>Points</th>
+                <th>Routes</th>
+                <th>Trash</th>
                 <th>Status</th>
+                <th>Joined</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -173,24 +209,47 @@ export default function UsersPage() {
                 return (
                   <tr key={user.id}>
                     <td>
-                      <span className="profile-avatar">{getInitials(displayName)}</span>
-                    </td>
-                    <td>
-                      <div className="user-identity">
-                        <strong>{displayName}</strong>
-                        <span>{user.email || 'No email'}</span>
+                      <div className="user-cell">
+                        <span className="profile-avatar">{getInitials(displayName)}</span>
+                        <div className="user-identity">
+                          <strong>{displayName}</strong>
+                          <span className="user-handle">{getHandle(user)}</span>
+                        </div>
                       </div>
                     </td>
+                    <td>{user.email || 'No email'}</td>
                     <td>
-                      <span className={`role-chip ${user.role === 'admin' ? 'admin-mode' : ''}`}>
-                        {user.role || 'user'}
-                      </span>
+                      <select
+                        className="inline-select"
+                        onChange={(event) => handleRoleChange(user, event.target.value)}
+                        value={user.role || 'user'}
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
                     </td>
-                    <td>{Number(user.points || 0).toLocaleString()} pts</td>
                     <td>
-                      <span className={`status-chip ${user.status === 'suspended' ? 'danger' : ''}`}>
-                        {user.status || 'active'}
-                      </span>
+                      <PointsValue value={user.points} />
+                    </td>
+                    <td>{user.routesCompleted ?? user.routes ?? '—'}</td>
+                    <td>{user.totalTrashCollected ?? user.trashCollected ?? '—'}</td>
+                    <td>
+                      <StatusBadge status={user.status || 'active'} />
+                    </td>
+                    <td>{formatJoined(user.createdAt || user.joinedAt)}</td>
+                    <td>
+                      <div className="table-actions">
+                        <select
+                          className="inline-select"
+                          onChange={(event) => handleStatusChange(user, event.target.value)}
+                          value={user.status || 'active'}
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                          <option value="suspended">Suspended</option>
+                        </select>
+                        <IconActionButton label="View user profile" variant="view" />
+                      </div>
                     </td>
                   </tr>
                 );

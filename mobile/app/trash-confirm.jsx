@@ -5,9 +5,14 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { spacing, radius } from '../src/constants/theme';
 import CategorySuggestionCard from '../src/components/CategorySuggestionCard';
-import EcoQuestChatBubble from '../src/components/EcoQuestChatBubble';
-import { analyzeTrashPhoto, confirmTrash, getTrashCategories } from '../src/services/api';
+import { analyzeTrashPhoto, confirmTrash, getRouteSessionById, getTrashCategories } from '../src/services/api';
 import { clearPendingTrashPhoto, getPendingTrashPhoto } from '../src/utils/pendingTrashPhoto';
+
+const HIGH_CONFIDENCE_THRESHOLD = 0.7;
+
+function findCategoryById(categories, categoryId) {
+  return categories.find((category) => category.id === categoryId) || null;
+}
 
 export default function TrashConfirmScreen() {
   const router = useRouter();
@@ -19,7 +24,11 @@ export default function TrashConfirmScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [aiUserFeedback, setAiUserFeedback] = useState(null);
+  const [analysisSource, setAnalysisSource] = useState(null);
+  const [itemNumber, setItemNumber] = useState(null);
   const [pointsEarned, setPointsEarned] = useState(0);
   const [canFinishRoute, setCanFinishRoute] = useState(false);
   const [photoAsset] = useState(() => getPendingTrashPhoto());
@@ -32,7 +41,12 @@ export default function TrashConfirmScreen() {
     async function loadCategoriesAndSuggestion() {
       try {
         setCategoriesLoading(true);
-        const categoriesResponse = await getTrashCategories();
+        setAnalyzeError(false);
+
+        const [categoriesResponse, sessionResponse] = await Promise.all([
+          getTrashCategories(),
+          sessionId ? getRouteSessionById(sessionId).catch(() => null) : Promise.resolve(null),
+        ]);
         const activeCategories = categoriesResponse.categories || [];
 
         if (!isMounted) {
@@ -41,6 +55,9 @@ export default function TrashConfirmScreen() {
 
         setCategories(activeCategories);
         setSelectedCategory((currentCategory) => currentCategory || activeCategories[0] || null);
+
+        const approvedTrashCount = sessionResponse?.session?.approvedTrashCount ?? 0;
+        setItemNumber(approvedTrashCount + 1);
         setCategoriesLoading(false);
 
         if (!sessionId || !displayImageUri) {
@@ -53,17 +70,42 @@ export default function TrashConfirmScreen() {
           imageUri: displayImageUri,
           imageFileName: photoAsset?.fileName || null,
           imageMimeType: photoAsset?.mimeType || null,
+          imageBase64: photoAsset?.base64 || null,
         });
 
         if (!isMounted) {
           return;
         }
 
-        setAiSuggestion(analysisResponse.suggestion || null);
+        const suggestion = analysisResponse.suggestion || null;
+        setAiSuggestion(suggestion);
+        setAnalysisSource(analysisResponse.analysisSource || null);
+
+        if (__DEV__) {
+          console.log('[EcoQuest AI]', {
+            analysisSource: analysisResponse.analysisSource,
+            suggestedCategoryId: suggestion?.suggestedCategoryId,
+            confidence: suggestion?.confidence,
+            reason: suggestion?.reason,
+          });
+        }
+
+        if (
+          suggestion?.suggestedCategoryId &&
+          !suggestion.needsReview &&
+          (suggestion.confidence ?? 0) >= HIGH_CONFIDENCE_THRESHOLD
+        ) {
+          const suggestedCategory = findCategoryById(activeCategories, suggestion.suggestedCategoryId);
+
+          if (suggestedCategory) {
+            setSelectedCategory(suggestedCategory);
+          }
+        }
       } catch (error) {
         console.log('Error loading trash categories or AI suggestion:', error);
         if (isMounted) {
           setCategoriesLoading(false);
+          setAnalyzeError(true);
         }
       } finally {
         if (isMounted) {
@@ -77,7 +119,30 @@ export default function TrashConfirmScreen() {
     return () => {
       isMounted = false;
     };
-  }, [displayImageUri, photoAsset?.fileName, photoAsset?.mimeType, sessionId]);
+  }, [displayImageUri, photoAsset?.base64, photoAsset?.fileName, photoAsset?.mimeType, sessionId]);
+
+  function applySuggestion() {
+    const suggestedCategory = findCategoryById(categories, aiSuggestion?.suggestedCategoryId);
+
+    if (suggestedCategory) {
+      setSelectedCategory(suggestedCategory);
+    }
+  }
+
+  function handleCorrectFeedback() {
+    setAiUserFeedback('correct');
+    applySuggestion();
+  }
+
+  function handleWrongFeedback() {
+    setAiUserFeedback('wrong');
+
+    if (selectedCategory?.id === aiSuggestion?.suggestedCategoryId) {
+      const fallbackCategory =
+        categories.find((category) => category.id !== aiSuggestion?.suggestedCategoryId) || null;
+      setSelectedCategory(fallbackCategory);
+    }
+  }
 
   const incrementQuantity = () => setQuantity(prev => prev + 1);
   const decrementQuantity = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
@@ -110,6 +175,9 @@ export default function TrashConfirmScreen() {
           aiConfidence: aiSuggestion?.confidence ?? null,
           aiReason: aiSuggestion?.reason || null,
           aiNeedsReview: Boolean(aiSuggestion?.needsReview),
+          aiDetectedObject: aiSuggestion?.detectedObject || null,
+          aiDetectedMaterial: aiSuggestion?.detectedMaterial || null,
+          aiUserFeedback: aiUserFeedback || null,
         }
       );
 
@@ -146,7 +214,7 @@ export default function TrashConfirmScreen() {
           <Feather name="chevron-left" size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Confirm Trash</Text>
-        <Text style={styles.itemText}>Item #8</Text>
+        <Text style={styles.itemText}>{itemNumber ? `Item #${itemNumber}` : ''}</Text>
       </View>
 
       <ScrollView 
@@ -172,16 +240,12 @@ export default function TrashConfirmScreen() {
 
         <CategorySuggestionCard
           loading={analyzing}
+          error={analyzeError}
           suggestion={aiSuggestion}
-          onAccept={() => {
-            const suggestedCategory = categories.find(
-              (category) => category.id === aiSuggestion?.suggestedCategoryId
-            );
-
-            if (suggestedCategory) {
-              setSelectedCategory(suggestedCategory);
-            }
-          }}
+          feedback={aiUserFeedback}
+          analysisSource={analysisSource}
+          onCorrect={handleCorrectFeedback}
+          onWrong={handleWrongFeedback}
         />
 
         {/* Trash Category */}
@@ -254,24 +318,19 @@ export default function TrashConfirmScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <EcoQuestChatBubble
-              style={styles.modalChatBubble}
-              headline="Trash confirmed!"
-              footer={
-                <>
-                  <View style={styles.pointsRow}>
-                    <Feather name="zap" size={16} color="#16A34A" />
-                    <Text style={styles.pointsText}>+{pointsEarned} pts tracked</Text>
-                  </View>
-                  <Text style={styles.statusText}>
-                    {canFinishRoute
-                      ? 'Minimum requirement reached.'
-                      : 'Keep collecting to finish the route.'}
-                  </Text>
-                </>
-              }
-              showAction={false}
-            />
+            <View style={styles.modalIconContainer}>
+              <Feather name="check" size={40} color="#16A34A" />
+            </View>
+            <Text style={styles.modalTitle}>Trash Confirmed!</Text>
+            <View style={styles.pointsRow}>
+              <Feather name="zap" size={18} color="#16A34A" />
+              <Text style={styles.pointsText}>+{pointsEarned} pts tracked</Text>
+            </View>
+            <Text style={styles.statusText}>
+              {canFinishRoute
+                ? 'Minimum requirement reached.'
+                : 'Keep collecting to finish the route.'}
+            </Text>
 
             <TouchableOpacity
               style={styles.modalButton}
@@ -494,6 +553,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: radius.xl,
     padding: spacing.xl,
+    alignItems: 'center',
     width: '100%',
     maxWidth: 340,
     shadowColor: '#000',
@@ -502,24 +562,42 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 20,
   },
-  modalChatBubble: {
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: spacing.md,
+    textAlign: 'center',
   },
   pointsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
+    marginBottom: spacing.xs,
   },
   pointsText: {
     color: '#16A34A',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
   },
   statusText: {
     color: '#6B7280',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: spacing.xs,
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
   },
   modalButton: {
     backgroundColor: '#16A34A',

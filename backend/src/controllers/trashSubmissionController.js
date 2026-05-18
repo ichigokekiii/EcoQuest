@@ -1,5 +1,8 @@
 const { getDb, isFirebaseConfigured } = require('../config/firebaseAdmin');
-const { getActiveTrashCategories } = require('../services/categoryMemoryService');
+const {
+  getActiveTrashCategories,
+  getUsefulCorrectionExamples,
+} = require('../services/categoryMemoryService');
 const { analyzeTrashImage } = require('../services/trashClassificationService');
 
 function createHttpError(statusCode, message) {
@@ -36,16 +39,22 @@ async function analyzeTrashSubmission(req, res, next) {
   try {
     await verifySessionAccess(req.body.sessionId, req.user.id);
 
-    const categories = await getActiveTrashCategories();
-    const suggestion = await analyzeTrashImage({
+    const [categories, correctionExamples] = await Promise.all([
+      getActiveTrashCategories(),
+      getUsefulCorrectionExamples(),
+    ]);
+    const analysis = await analyzeTrashImage({
       categories,
       imageUri: req.body.imageUri,
       imageFileName: req.body.imageFileName,
       imageMimeType: req.body.imageMimeType,
+      imageBase64: req.body.imageBase64,
+      correctionExamples,
     });
 
     res.json({
-      suggestion,
+      suggestion: analysis.suggestion,
+      analysisSource: analysis.analysisSource,
       categories,
     });
   } catch (error) {

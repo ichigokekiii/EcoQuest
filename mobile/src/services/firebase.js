@@ -9,6 +9,13 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.warn(
+    '[Eco Quest] Missing EXPO_PUBLIC_FIREBASE_* in root .env. ' +
+      'Copy .env.example, fill Firebase web app values, then restart Metro with --clear.'
+  );
+}
+
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);

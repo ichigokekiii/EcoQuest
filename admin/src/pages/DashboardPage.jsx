@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import Header from '../components/Header';
+import PageStatRow from '../components/PageStatRow';
+import PointsValue from '../components/PointsValue';
+import StatCard from '../components/StatCard';
+import StatusBadge from '../components/StatusBadge';
 import api from '../services/api';
-
-const summaryCards = [
-  { key: 'users', label: 'Total Users', icon: 'users', tone: 'blue', delta: 'Community accounts' },
-  { key: 'activeRoutes', label: 'Active Routes', icon: 'route', tone: 'green', delta: 'Visible on mobile' },
-  { key: 'activeMissions', label: 'Active Missions', icon: 'mission', tone: 'yellow', delta: 'Cleanup goals' },
-  { key: 'trashSubmissions', label: 'Trash Submissions', icon: 'trash', tone: 'red', delta: 'Proof records' },
-];
 
 function formatTimestamp(value) {
   if (!value) {
@@ -21,41 +19,51 @@ function formatTimestamp(value) {
     return 'Recent';
   }
 
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
-function SectionIcon({ name }) {
-  switch (name) {
-    case 'users':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-8 2c-3.9 0-7 2.2-7 5v1h14v-1c0-2.8-3.1-5-7-5Z" />
-        </svg>
-      );
-    case 'route':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 18a3 3 0 1 1 0-6h12a3 3 0 1 1 0 6H6Zm0-8a3 3 0 1 1 2.6-4.5h6.8A3 3 0 1 1 18 10H6Z" />
-        </svg>
-      );
-    case 'mission':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-8 13-4-4 1.4-1.4 2.6 2.6 5.6-5.6L18 9l-7 7Z" />
-        </svg>
-      );
-    default:
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M10 2h4l1 2h5v2H4V4h5l1-2Zm-4 6h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Z" />
-        </svg>
-      );
+function isToday(value) {
+  if (!value) {
+    return false;
   }
+
+  const date = new Date(value);
+  const now = new Date();
+
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
 }
 
-export default function DashboardPage({ currentUser }) {
+function buildWeeklyBars(submissions) {
+  const bars = Array.from({ length: 7 }, () => 0);
+  const now = new Date();
+
+  submissions.forEach((submission) => {
+    const createdAt = new Date(submission.createdAt || submission.updatedAt);
+    if (Number.isNaN(createdAt.getTime())) {
+      return;
+    }
+
+    const dayDiff = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+    if (dayDiff >= 0 && dayDiff < 7) {
+      bars[6 - dayDiff] += 1;
+    }
+  });
+
+  const maxValue = Math.max(...bars, 1);
+  return bars.map((count) => Math.round((count / maxValue) * 100));
+}
+
+export default function DashboardPage({ adminProfile }) {
   const [dashboard, setDashboard] = useState(null);
-  const [routes, setRoutes] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,16 +77,10 @@ export default function DashboardPage({ currentUser }) {
         setLoading(true);
         setErrorMessage('');
 
-        const [
-          dashboardResponse,
-          routesResponse,
-          sessionsResponse,
-          submissionsResponse,
-        ] = await Promise.all([
+        const [dashboardResponse, sessionsResponse, submissionsResponse] = await Promise.all([
           api.get('/admin/dashboard'),
-          api.get('/admin/routes?limit=6'),
-          api.get('/admin/route-sessions?limit=6'),
-          api.get('/admin/trash-submissions?limit=6'),
+          api.get('/admin/route-sessions?limit=50'),
+          api.get('/admin/trash-submissions?limit=50'),
         ]);
 
         if (!isMounted) {
@@ -86,7 +88,6 @@ export default function DashboardPage({ currentUser }) {
         }
 
         setDashboard(dashboardResponse.data);
-        setRoutes(routesResponse.data.routes || []);
         setSessions(sessionsResponse.data.sessions || []);
         setSubmissions(submissionsResponse.data.submissions || []);
       } catch (error) {
@@ -111,6 +112,76 @@ export default function DashboardPage({ currentUser }) {
   }, []);
 
   const summary = dashboard?.summary || {};
+  const weeklyBars = useMemo(() => buildWeeklyBars(submissions), [submissions]);
+  const weeklyTotal = submissions.filter((submission) => {
+    const createdAt = new Date(submission.createdAt || submission.updatedAt);
+    const now = new Date();
+    const dayDiff = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+    return dayDiff >= 0 && dayDiff < 7;
+  }).length;
+
+  const activityRows = useMemo(() => {
+    const sessionRows = sessions.map((session) => ({
+      id: session.id,
+      user: session.userName || session.userId || 'EcoQuest User',
+      handle: `@${String(session.userId || 'user').slice(0, 8)}`,
+      route: session.routeName || session.routeId || 'Cleanup Route',
+      trash: session.trashCollected ?? session.itemsCollected ?? 0,
+      points: session.pointsEarned ?? session.totalPointsEarned ?? 0,
+      status: session.status || 'active',
+      time: formatTimestamp(session.updatedAt || session.createdAt),
+    }));
+
+    const submissionRows = submissions.map((item) => ({
+      id: item.id,
+      user: item.userName || item.userId || 'EcoQuest User',
+      handle: `@${String(item.userId || 'user').slice(0, 8)}`,
+      route: item.routeName || item.routeId || 'Cleanup Route',
+      trash: item.quantity || 1,
+      points: item.pointsAwarded ?? 0,
+      status: item.status === 'pending' ? 'pending' : item.status || 'completed',
+      time: formatTimestamp(item.createdAt),
+    }));
+
+    return [...sessionRows, ...submissionRows]
+      .sort((first, second) => second.time.localeCompare(first.time))
+      .slice(0, 8);
+  }, [sessions, submissions]);
+
+  const cardValues = {
+    users: summary.users ?? 0,
+    activeRoutes: summary.activeRoutes ?? summary.routes ?? 0,
+    trashSubmissions: summary.trashSubmissions ?? submissions.length,
+    pendingSubmissions: summary.pendingSubmissions ??
+      submissions.filter((item) => (item.status || 'pending') === 'pending').length,
+  };
+
+  const summaryCards = [
+    {
+      key: 'users',
+      label: 'Total Users',
+      tone: 'blue',
+      footnote: `${summary.activeUsers ?? 0} active users`,
+    },
+    {
+      key: 'activeRoutes',
+      label: 'Active Routes',
+      tone: 'green',
+      footnote: `${summary.routes ?? 0} total routes`,
+    },
+    {
+      key: 'trashSubmissions',
+      label: 'Trash Submissions',
+      tone: 'yellow',
+      footnote: `${weeklyTotal} this week`,
+    },
+    {
+      key: 'pendingSubmissions',
+      label: 'Pending Reviews',
+      tone: 'red',
+      footnote: 'Needs admin review',
+    },
+  ];
 
   if (loading) {
     return <p className="loading-state">Synchronizing admin dashboard metrics...</p>;
@@ -119,136 +190,111 @@ export default function DashboardPage({ currentUser }) {
   return (
     <section className="dashboard-page">
       <Header
+        subtitle={
+          adminProfile?.fullName
+            ? `Welcome back, ${adminProfile.fullName} · ${new Date().toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })}`
+            : new Date().toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              })
+        }
         title="Dashboard"
-        subtitle={new Date().toLocaleDateString(undefined, {
-          weekday: 'long',
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        })}
       />
 
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
 
-      <section className="stats-grid" aria-label="Summary metrics">
+      <PageStatRow>
         {summaryCards.map((card) => (
-          <article className="stat-card" key={card.key}>
-            <div className="stat-card-body">
-              <span className={`stat-icon ${card.tone}`}>
-                <SectionIcon name={card.icon} />
-              </span>
-              <div className="stat-card-content">
-                <strong>{summary[card.key] ?? 0}</strong>
-                <p>{card.label}</p>
-              </div>
-            </div>
-            <p className="stat-footnote">{card.delta}</p>
-          </article>
+          <StatCard
+            footnote={card.footnote}
+            key={card.key}
+            label={card.label}
+            tone={card.tone}
+            value={cardValues[card.key] ?? 0}
+          />
         ))}
-      </section>
+      </PageStatRow>
 
       <section className="content-grid">
-        <article className="chart-card">
+        <article className="data-card">
           <div className="section-head">
             <div>
-              <h2>Collection Trends</h2>
-              <p>Simple activity curve based on route sessions and trash submissions.</p>
+              <h2>Recent Activity</h2>
+              <p>Latest route sessions and trash submissions.</p>
             </div>
-            <button className="ghost-link" type="button">
-              Generate Report
-            </button>
+            <Link className="link-action" to="/verification">
+              View reviews →
+            </Link>
           </div>
-          <div className="chart-panel">
-            <svg className="trend-chart" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(77, 133, 88, 0.36)" />
-                  <stop offset="100%" stopColor="rgba(77, 133, 88, 0.04)" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M0,100 L0,82 12,76 24,70 36,72 48,54 60,48 72,42 84,36 100,28 L100,100 Z"
-                fill="url(#trendFill)"
-              />
-              <polyline
-                points="0,82 12,76 24,70 36,72 48,54 60,48 72,42 84,36 100,28"
-                fill="none"
-                stroke="#15803d"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="3.5"
-              />
-            </svg>
-          </div>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Route</th>
+                <th>Trash</th>
+                <th>Points</th>
+                <th>Status</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activityRows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <div className="user-identity">
+                      <strong>{row.user}</strong>
+                      <span className="user-handle">{row.handle}</span>
+                    </div>
+                  </td>
+                  <td>{row.route}</td>
+                  <td>{row.trash}</td>
+                  <td>
+                    <PointsValue value={row.points} />
+                  </td>
+                  <td>
+                    <StatusBadge status={row.status} />
+                  </td>
+                  <td>{row.time}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {activityRows.length === 0 ? <p className="empty-state">No recent activity yet.</p> : null}
         </article>
 
-        <aside className="submissions-card">
-          <h2>Recent Submissions</h2>
-          <div className="submission-list">
-            {submissions.slice(0, 5).map((item) => (
-              <div className="submission-item" key={item.id}>
-                <div>
-                  <p className="submission-name">{item.userName || item.userId || 'EcoQuest User'}</p>
-                  <p className="submission-route">{item.routeName || item.routeId || 'Cleanup Route'}</p>
-                  <p className="submission-route">
-                    Final: {item.finalCategoryName || item.trashCategoryName || 'Uncategorized'}
-                    {' · '}
-                    AI: {item.aiSuggestedCategoryName || 'Not analyzed'}
-                    {item.categoryChangedByUser ? ' · user changed' : ''}
-                  </p>
-                </div>
-                <span className={`status-pill ${item.status === 'pending' ? 'verify' : 'approved'}`}>
-                  {item.status || 'auto_approved'}
-                </span>
+        <aside className="chart-card">
+          <div className="section-head">
+            <div>
+              <h2>Weekly Submissions</h2>
+              <p>Trash photos in the last 7 days</p>
+            </div>
+          </div>
+          <div className="bar-chart" aria-hidden="true">
+            {weeklyBars.map((height, index) => (
+              <div className="bar-chart-bar" key={index}>
+                <span style={{ height: `${height}%` }} />
+                <label>{['M', 'T', 'W', 'T', 'F', 'S', 'S'][index]}</label>
               </div>
             ))}
-            {submissions.length === 0 ? <p className="muted">No trash submissions yet.</p> : null}
+          </div>
+          <div className="weekly-summary">
+            <div>
+              <strong>{weeklyTotal}</strong>
+              <span>Total</span>
+            </div>
+            <div>
+              <strong>{Math.max(1, Math.round(weeklyTotal / 7))}</strong>
+              <span>Avg/day</span>
+            </div>
           </div>
         </aside>
-      </section>
-
-      <section className="content-grid">
-        <article className="data-card">
-          <div className="section-head">
-            <div>
-              <h2>Active Routes</h2>
-              <p>Routes managed by admin and consumed by mobile discovery.</p>
-            </div>
-          </div>
-          <div className="card-list">
-            {routes.slice(0, 5).map((route) => (
-              <div className="list-item" key={route.id}>
-                <div>
-                  <strong>{route.name || route.title}</strong>
-                  <p className="muted">{route.locationName || route.startLocation?.name || 'Route Start'}</p>
-                </div>
-                <span className={`status-chip ${route.status === 'draft' ? 'warning' : ''}`}>
-                  {route.status || 'active'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="data-card">
-          <div className="section-head">
-            <div>
-              <h2>Recent Sessions</h2>
-              <p>Mobile cleanup attempts flowing through the shared backend.</p>
-            </div>
-          </div>
-          <div className="card-list">
-            {sessions.slice(0, 5).map((session) => (
-              <div className="list-item" key={session.id}>
-                <div>
-                  <strong>{session.routeName || session.routeId}</strong>
-                  <p className="muted">{formatTimestamp(session.updatedAt || session.createdAt)}</p>
-                </div>
-                <span className="status-chip">{session.status}</span>
-              </div>
-            ))}
-          </div>
-        </article>
       </section>
     </section>
   );

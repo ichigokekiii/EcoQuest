@@ -28,3 +28,16 @@ This app is separate from the Expo mobile client and talks to the shared Express
 - `VITE_FIREBASE_PROJECT_ID`
 - `VITE_FIREBASE_STORAGE_BUCKET`
 - `VITE_FIREBASE_APP_ID`
+- `VITE_GOOGLE_MAPS_WEB_API_KEY` (Maps JavaScript + Places + Directions for route creation)
+
+## Admin bootstrap
+
+1. Create a Firebase Auth user (email/password or Google) in the Firebase console.
+2. Sign in once through the admin app so `POST /api/auth/sync-user` creates `users/{uid}`.
+3. Promote that user to admin using one of these options:
+   - Firestore console: set `users/{uid}.role` to `admin`
+   - Seed/script workflow for the first admin account
+   - After the first admin exists: use **Users** page role dropdown (`PATCH /api/admin/users/:userId/role`)
+4. Sign out and sign back in. The admin shell verifies `role === admin` through Express before showing the dashboard.
+
+Non-admin Firebase accounts will see an access denied screen instead of broken API calls.

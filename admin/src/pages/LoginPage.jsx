@@ -1,20 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 
+import AuthBrandPanel from '../components/AuthBrandPanel';
+import GoogleSignInButton from '../components/GoogleSignInButton';
+import { syncAdminUserProfile } from '../services/adminAuth';
 import { auth } from '../services/firebase';
-
-function AuthBrandPanel() {
-  return (
-    <aside className="auth-brand-panel">
-      <div className="auth-brand-content">
-        <img alt="Eco Quest" className="auth-brand-logo" src="/eco-logo.svg" />
-        <p className="auth-brand-name">Eco Quest</p>
-        <p className="auth-brand-tagline">Clean the world. Manage missions, routes, and rewards.</p>
-      </div>
-    </aside>
-  );
-}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -28,9 +19,35 @@ export default function LoginPage() {
     setErrorMessage('');
 
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      await syncAdminUserProfile(credential.user);
     } catch (error) {
-      setErrorMessage(error.message || 'Unable to sign in.');
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+        setErrorMessage('Invalid email or password.');
+      } else if (error.response?.status === 403) {
+        setErrorMessage('This account does not have admin access.');
+      } else {
+        setErrorMessage(error.response?.data?.message || error.message || 'Unable to sign in.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const provider = new GoogleAuthProvider();
+      const credential = await signInWithPopup(auth, provider);
+      await syncAdminUserProfile(credential.user);
+    } catch (error) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        setErrorMessage('Google sign-in was cancelled.');
+      } else {
+        setErrorMessage(error.response?.data?.message || error.message || 'Unable to sign in with Google.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -42,10 +59,15 @@ export default function LoginPage() {
 
       <section className="auth-form-panel">
         <div className="auth-card">
-          <p className="auth-card-welcome">Welcome to Eco Quest</p>
-          <h1>Log into your Account</h1>
+          <div className="auth-card-intro">
+            <img alt="" aria-hidden="true" className="auth-card-mark" src="/eco-logo-mint.svg" />
+            <div>
+              <p className="auth-card-welcome">Welcome back</p>
+              <h1>Sign in to Admin</h1>
+            </div>
+          </div>
 
-          <form className="stack" onSubmit={handleSubmit}>
+          <form className="stack auth-form" onSubmit={handleSubmit}>
             <label className="field">
               <span>Email</span>
               <input
@@ -76,6 +98,12 @@ export default function LoginPage() {
               {submitting ? 'Signing in...' : 'Log In'}
             </button>
           </form>
+
+          <div className="auth-divider">
+            <span>or</span>
+          </div>
+
+          <GoogleSignInButton disabled={submitting} onClick={handleGoogleSignIn} />
 
           <p className="auth-switch">
             Need an account? <Link to="/register">Create one</Link>

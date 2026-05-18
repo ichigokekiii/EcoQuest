@@ -6,6 +6,20 @@ export default function Header({
   onSearchChange,
   actions,
 }) {
+  const searchInput = (
+    <label className="search-shell">
+      <svg viewBox="0 0 24 24" className="search-icon" aria-hidden="true">
+        <path d="M10.5 4a6.5 6.5 0 1 0 4 11.6l4.4 4.5 1.4-1.4-4.4-4.5A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z" />
+      </svg>
+      <input
+        onChange={onSearchChange}
+        placeholder={searchPlaceholder || 'Search anything...'}
+        type="text"
+        value={searchValue}
+      />
+    </label>
+  );
+
   return (
     <header className="topbar">
       <div className="page-header-row">
@@ -14,30 +28,9 @@ export default function Header({
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
 
-        <div className="topbar-row">
+        <div className="topbar-utilities">
           {actions ? <div className="header-actions">{actions}</div> : null}
-
-          {searchPlaceholder ? (
-            <label className="search-shell">
-              <svg viewBox="0 0 24 24" className="search-icon" aria-hidden="true">
-                <path d="M10.5 4a6.5 6.5 0 1 0 4 11.6l4.4 4.5 1.4-1.4-4.4-4.5A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z" />
-              </svg>
-              <input
-                onChange={onSearchChange}
-                placeholder={searchPlaceholder}
-                type="text"
-                value={searchValue}
-              />
-            </label>
-          ) : (
-            <label className="search-shell">
-              <svg viewBox="0 0 24 24" className="search-icon" aria-hidden="true">
-                <path d="M10.5 4a6.5 6.5 0 1 0 4 11.6l4.4 4.5 1.4-1.4-4.4-4.5A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z" />
-              </svg>
-              <input placeholder="Search anything..." type="text" />
-            </label>
-          )}
-
+          {searchInput}
           <div className="topbar-actions">
             <button type="button" className="icon-button" aria-label="Notifications">
               <svg viewBox="0 0 24 24" aria-hidden="true">

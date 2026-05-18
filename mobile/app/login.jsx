@@ -9,6 +9,7 @@ import Input from '../src/components/Input';
 import Button from '../src/components/Button';
 import { auth } from '../src/services/firebase';
 import api from '../src/services/api';
+import { getFirebaseAuthErrorMessage } from '../src/utils/authErrors';
 import { colors, spacing, radius } from '../src/constants/theme';
 
 export default function LoginScreen() {
@@ -44,7 +45,7 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (error) {
       console.log('Login error:', error);
-      Alert.alert('Login failed', error.response?.data?.message || error.message || 'Unable to sign in right now.');
+      Alert.alert('Login failed', getFirebaseAuthErrorMessage(error, 'Unable to sign in right now.'));
     } finally {
       setLoading(false);
     }

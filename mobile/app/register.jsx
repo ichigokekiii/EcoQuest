@@ -9,6 +9,7 @@ import Input from '../src/components/Input';
 import Button from '../src/components/Button';
 import { auth } from '../src/services/firebase';
 import api from '../src/services/api';
+import { getFirebaseAuthErrorMessage } from '../src/utils/authErrors';
 import { colors, spacing, radius } from '../src/constants/theme';
 
 function getPasswordStrength(password) {
@@ -94,7 +95,10 @@ export default function RegisterScreen() {
       router.replace('/(tabs)');
     } catch (error) {
       console.log('Register error:', error);
-      Alert.alert('Registration failed', error.response?.data?.message || error.message || 'Unable to create your account right now.');
+      Alert.alert(
+        'Registration failed',
+        getFirebaseAuthErrorMessage(error, 'Unable to create your account right now.')
+      );
     } finally {
       setLoading(false);
     }

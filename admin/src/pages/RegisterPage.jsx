@@ -1,17 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 
-function AuthBrandPanel() {
-  return (
-    <aside className="auth-brand-panel">
-      <div className="auth-brand-content">
-        <img alt="Eco Quest" className="auth-brand-logo" src="/eco-logo.svg" />
-        <p className="auth-brand-name">Eco Quest</p>
-        <p className="auth-brand-tagline">Clean the world. Manage missions, routes, and rewards.</p>
-      </div>
-    </aside>
-  );
-}
+import AuthBrandPanel from '../components/AuthBrandPanel';
 
 export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
@@ -42,10 +32,15 @@ export default function RegisterPage() {
 
       <section className="auth-form-panel">
         <div className="auth-card">
-          <p className="auth-card-welcome">Join Eco Quest</p>
-          <h1>Create your Account</h1>
+          <div className="auth-card-intro">
+            <img alt="" aria-hidden="true" className="auth-card-mark" src="/eco-logo-mint.svg" />
+            <div>
+              <p className="auth-card-welcome">Join Eco Quest</p>
+              <h1>Create your account</h1>
+            </div>
+          </div>
 
-          <form className="stack" onSubmit={handleSubmit}>
+          <form className="stack auth-form" onSubmit={handleSubmit}>
             <label className="field">
               <span>Full Name</span>
               <input

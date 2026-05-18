@@ -8,7 +8,10 @@ const {
   getSessionDetails,
   startRouteSession: startMockRouteSession,
 } = require('../mock/mockData');
-const { getActiveTrashCategoryById } = require('../services/categoryMemoryService');
+const {
+  getActiveTrashCategoryById,
+  saveCorrectionExample,
+} = require('../services/categoryMemoryService');
 const { uploadTrashProofImage } = require('../services/trashImageStorageService');
 
 function createHttpError(statusCode, message) {
@@ -264,25 +267,10 @@ async function confirmRouteTrash(req, res, next) {
       }
 
       const timestamp = admin.firestore.Timestamp.now();
-      const updatedMissionProgress = (sessionData.missionProgress || []).map((mission) => {
-        if (mission.trashCategoryId && mission.trashCategoryId !== category.id) {
-          return mission;
-        }
-
-        const currentCount = (mission.currentCount || 0) + quantity;
-
-        return {
-          ...mission,
-          currentCount,
-          isCompleted: currentCount >= (mission.requiredCount || 0),
-        };
-      });
-
       const updatedSession = {
         ...sessionData,
         trashCollected: (sessionData.trashCollected || 0) + quantity,
-        approvedTrashCount: (sessionData.approvedTrashCount || 0) + quantity,
-        missionProgress: updatedMissionProgress,
+        missionProgress: sessionData.missionProgress || [],
         updatedAt: timestamp,
       };
 
@@ -306,25 +294,20 @@ async function confirmRouteTrash(req, res, next) {
         aiConfidence: req.body.aiConfidence ?? null,
         aiReason: req.body.aiReason || null,
         aiNeedsReview: Boolean(req.body.aiNeedsReview),
+        aiUserFeedback: req.body.aiUserFeedback || null,
         categoryChangedByUser: Boolean(
           req.body.aiSuggestedCategoryId && req.body.aiSuggestedCategoryId !== category.id
         ),
-        status: 'auto_approved',
+        status: 'pending',
         createdAt: timestamp,
         updatedAt: timestamp,
       };
 
       transaction.update(sessionRef, {
         trashCollected: updatedSession.trashCollected,
-        approvedTrashCount: updatedSession.approvedTrashCount,
-        missionProgress: updatedMissionProgress,
         updatedAt: timestamp,
       });
       transaction.set(submissionRef, submissionData);
-      transaction.update(db.collection('users').doc(req.user.id), {
-        totalTrashCollected: admin.firestore.FieldValue.increment(quantity),
-        updatedAt: timestamp,
-      });
 
       return {
         submission: {
@@ -340,6 +323,26 @@ async function confirmRouteTrash(req, res, next) {
         },
       };
     });
+
+    const shouldSaveCorrection =
+      result.submission.categoryChangedByUser ||
+      (req.body.aiUserFeedback === 'wrong' &&
+        result.submission.aiSuggestedCategoryId &&
+        result.submission.aiSuggestedCategoryId !== result.submission.finalCategoryId);
+
+    if (shouldSaveCorrection) {
+      saveCorrectionExample({
+        aiSuggestedCategoryId: result.submission.aiSuggestedCategoryId,
+        aiSuggestedCategoryName: result.submission.aiSuggestedCategoryName,
+        finalCategoryId: result.submission.finalCategoryId,
+        finalCategoryName: result.submission.finalCategoryName,
+        detectedObject: req.body.aiDetectedObject || null,
+        detectedMaterial: req.body.aiDetectedMaterial || null,
+        userId: req.user.id,
+      }).catch((memoryError) => {
+        console.error('Failed to save trash classification correction:', memoryError.message);
+      });
+    }
 
     return res.status(201).json({
       message: 'Trash submission saved',

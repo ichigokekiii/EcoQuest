@@ -77,6 +77,7 @@ async function getAdminDashboard(req, res, next) {
       activeMissionsSnapshot,
       activeSessionsSnapshot,
       submissionsSnapshot,
+      pendingSubmissionsSnapshot,
     ] = await Promise.all([
       db.collection('users').get(),
       db.collection('users').where('status', '==', 'active').get(),
@@ -86,6 +87,7 @@ async function getAdminDashboard(req, res, next) {
       db.collection('missions').where('status', '==', 'active').get(),
       db.collection('routeSessions').where('status', '==', 'active').get(),
       db.collection('trashSubmissions').get(),
+      db.collection('trashSubmissions').where('status', '==', 'pending').get(),
     ]);
 
     return res.json({
@@ -103,6 +105,7 @@ async function getAdminDashboard(req, res, next) {
         activeMissions: activeMissionsSnapshot.size,
         activeRouteSessions: activeSessionsSnapshot.size,
         trashSubmissions: submissionsSnapshot.size,
+        pendingSubmissions: pendingSubmissionsSnapshot.size,
       },
     });
   } catch (error) {
@@ -317,6 +320,235 @@ async function listAdminTrashSubmissions(req, res, next) {
   }
 }
 
+async function updateAdminUserRole(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      return res.status(503).json({ message: 'Firebase is not configured for user role updates.' });
+    }
+
+    const allowedRoles = ['user', 'admin'];
+    const nextRole = req.body.role;
+
+    if (!allowedRoles.includes(nextRole)) {
+      return res.status(400).json({ message: 'Role must be user or admin.' });
+    }
+
+    const userRef = getDb().collection('users').doc(req.params.userId);
+    const existingUser = await userRef.get();
+
+    if (!existingUser.exists) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await userRef.set(
+      {
+        role: nextRole,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const updatedUser = await userRef.get();
+
+    return res.json({
+      message: 'User role updated',
+      user: serializeDoc(updatedUser),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateAdminUserStatus(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      return res.status(503).json({ message: 'Firebase is not configured for user status updates.' });
+    }
+
+    const allowedStatuses = ['active', 'inactive', 'suspended'];
+    const nextStatus = req.body.status;
+
+    if (!allowedStatuses.includes(nextStatus)) {
+      return res.status(400).json({ message: 'Status must be active, inactive, or suspended.' });
+    }
+
+    const userRef = getDb().collection('users').doc(req.params.userId);
+    const existingUser = await userRef.get();
+
+    if (!existingUser.exists) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await userRef.set(
+      {
+        status: nextStatus,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const updatedUser = await userRef.get();
+
+    return res.json({
+      message: 'User status updated',
+      user: serializeDoc(updatedUser),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+function buildTrashCategoryData(body, currentCategory = {}) {
+  return {
+    name: body.name ?? currentCategory.name ?? 'Untitled Category',
+    description: body.description ?? currentCategory.description ?? '',
+    examples: Array.isArray(body.examples)
+      ? body.examples
+      : currentCategory.examples || [],
+    rules: Array.isArray(body.rules) ? body.rules : currentCategory.rules || [],
+    status: body.status ?? currentCategory.status ?? 'active',
+  };
+}
+
+async function listAdminTrashCategories(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      return res.json({ categories: getAdminDashboardData().trashCategories || [] });
+    }
+
+    const snapshot = await getDb()
+      .collection('trashCategories')
+      .limit(parseLimit(req.query.limit, 50))
+      .get();
+    const categories = sortByUpdatedAt(snapshot.docs.map(serializeDoc));
+
+    return res.json({ categories });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function createAdminTrashCategory(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      return res.status(503).json({ message: 'Firebase is not configured for category writes.' });
+    }
+
+    const categoryId =
+      req.body.id?.trim() ||
+      String(req.body.name || 'category')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
+    if (!categoryId) {
+      return res.status(400).json({ message: 'Category id or name is required.' });
+    }
+
+    const categoryRef = getDb().collection('trashCategories').doc(categoryId);
+    const existingCategory = await categoryRef.get();
+
+    if (existingCategory.exists) {
+      return res.status(409).json({ message: 'Category id already exists.' });
+    }
+
+    const categoryData = {
+      ...buildTrashCategoryData(req.body),
+      createdBy: req.user.id,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await categoryRef.set(categoryData);
+    const categoryDoc = await categoryRef.get();
+
+    return res.status(201).json({
+      message: 'Trash category created',
+      category: serializeDoc(categoryDoc),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateAdminTrashCategory(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      return res.status(503).json({ message: 'Firebase is not configured for category writes.' });
+    }
+
+    const categoryRef = getDb().collection('trashCategories').doc(req.params.categoryId);
+    const existingCategory = await categoryRef.get();
+
+    if (!existingCategory.exists) {
+      return res.status(404).json({ message: 'Trash category not found' });
+    }
+
+    await categoryRef.set(
+      {
+        ...buildTrashCategoryData(req.body, existingCategory.data()),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const updatedCategory = await categoryRef.get();
+
+    return res.json({
+      message: 'Trash category updated',
+      category: serializeDoc(updatedCategory),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function applyTrashSubmissionApproval(submissionRef, submissionData, reviewerId) {
+  const db = getDb();
+  const quantity = submissionData.quantity || 1;
+
+  return db.runTransaction(async (transaction) => {
+    const sessionRef = db.collection('routeSessions').doc(submissionData.routeSessionId);
+    const sessionDoc = await transaction.get(sessionRef);
+
+    if (!sessionDoc.exists) {
+      throw new Error('Route session not found');
+    }
+
+    const sessionData = sessionDoc.data();
+    const timestamp = admin.firestore.Timestamp.now();
+    const updatedMissionProgress = (sessionData.missionProgress || []).map((mission) => {
+      if (mission.trashCategoryId && mission.trashCategoryId !== submissionData.finalCategoryId) {
+        return mission;
+      }
+
+      const currentCount = (mission.currentCount || 0) + quantity;
+
+      return {
+        ...mission,
+        currentCount,
+        isCompleted: currentCount >= (mission.requiredCount || 0),
+      };
+    });
+
+    transaction.update(sessionRef, {
+      approvedTrashCount: (sessionData.approvedTrashCount || 0) + quantity,
+      missionProgress: updatedMissionProgress,
+      updatedAt: timestamp,
+    });
+    transaction.update(db.collection('users').doc(submissionData.userId), {
+      totalTrashCollected: admin.firestore.FieldValue.increment(quantity),
+      updatedAt: timestamp,
+    });
+    transaction.update(submissionRef, {
+      status: 'approved',
+      reviewedBy: reviewerId,
+      reviewedAt: timestamp,
+      updatedAt: timestamp,
+    });
+  });
+}
+
 async function updateAdminTrashSubmission(req, res, next) {
   try {
     if (!isFirebaseConfigured()) {
@@ -346,9 +578,26 @@ async function updateAdminTrashSubmission(req, res, next) {
       return res.status(404).json({ message: 'Trash submission not found' });
     }
 
+    const existingData = existingSubmission.data();
+    const nextStatus = req.body.status || existingData.status || 'pending';
+
+    if (
+      nextStatus === 'approved' &&
+      existingData.status !== 'approved' &&
+      existingData.routeSessionId
+    ) {
+      await applyTrashSubmissionApproval(submissionRef, existingData, req.user.id);
+      const updatedSubmission = await submissionRef.get();
+
+      return res.json({
+        message: 'Submission approved',
+        submission: serializeDoc(updatedSubmission),
+      });
+    }
+
     await submissionRef.set(
       {
-        status: req.body.status || existingSubmission.data().status || 'pending',
+        status: nextStatus,
         reviewNotes: req.body.reviewNotes || null,
         reviewedBy: req.user.id,
         reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -516,9 +765,11 @@ module.exports = {
   createAdminMission,
   createAdminReward,
   createAdminRoute,
+  createAdminTrashCategory,
   getAdminDashboard,
   listAdminMissions,
   listAdminRewards,
+  listAdminTrashCategories,
   listAdminUsers,
   listAdminRoutes,
   listAdminRouteSessions,
@@ -526,5 +777,8 @@ module.exports = {
   updateAdminMission,
   updateAdminReward,
   updateAdminRoute,
+  updateAdminTrashCategory,
   updateAdminTrashSubmission,
+  updateAdminUserRole,
+  updateAdminUserStatus,
 };

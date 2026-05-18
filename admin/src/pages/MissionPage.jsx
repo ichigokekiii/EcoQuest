@@ -1,26 +1,45 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import Header from '../components/Header';
+import IconActionButton from '../components/IconActionButton';
+import PageStatRow from '../components/PageStatRow';
+import PointsValue from '../components/PointsValue';
+import StatCard from '../components/StatCard';
 import api from '../services/api';
 
 const emptyMissionForm = {
   title: '',
   routeId: '',
   requiredTrashCount: '5',
-  trashCategoryId: 'cat-plastic',
-  trashCategoryName: 'Plastic',
+  trashCategoryId: '',
+  trashCategoryName: '',
   pointsReward: '20',
   status: 'active',
 };
 
-function MissionForm({ form, routes, saving, onChange, onSubmit }) {
+function buildMissionForm(mission) {
+  return {
+    title: mission.title || '',
+    routeId: mission.routeId || '',
+    requiredTrashCount: String(mission.requiredTrashCount ?? '5'),
+    trashCategoryId: mission.trashCategoryId || '',
+    trashCategoryName: mission.trashCategoryName || '',
+    pointsReward: String(mission.pointsReward ?? '20'),
+    status: mission.status || 'active',
+  };
+}
+
+function MissionForm({ editingMissionId, onCancel, form, routes, categories, saving, onChange, onSubmit }) {
   return (
-    <section className="data-card">
+    <section className="data-card page-form-card collapsible-form">
       <div className="section-head">
         <div>
-          <h2>Create Mission</h2>
+          <h2>{editingMissionId ? 'Edit Mission' : 'Create Mission'}</h2>
           <p>Attach cleanup goals to admin-created routes.</p>
         </div>
+        <button className="outline-action" onClick={onCancel} type="button">
+          Close
+        </button>
       </div>
 
       <form className="form-grid" onSubmit={onSubmit}>
@@ -42,13 +61,28 @@ function MissionForm({ form, routes, saving, onChange, onSubmit }) {
         </label>
 
         <label className="field">
-          <span>Category Name</span>
-          <input name="trashCategoryName" onChange={onChange} value={form.trashCategoryName} />
-        </label>
-
-        <label className="field">
-          <span>Category ID</span>
-          <input name="trashCategoryId" onChange={onChange} value={form.trashCategoryId} />
+          <span>Trash Category</span>
+          <select
+            name="trashCategoryId"
+            onChange={(event) => {
+              const category = categories.find((item) => item.id === event.target.value);
+              onChange({
+                target: { name: 'trashCategoryId', value: event.target.value },
+              });
+              onChange({
+                target: { name: 'trashCategoryName', value: category?.name || '' },
+              });
+            }}
+            required
+            value={form.trashCategoryId}
+          >
+            <option value="">Choose category</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="field">
@@ -72,7 +106,7 @@ function MissionForm({ form, routes, saving, onChange, onSubmit }) {
 
         <div className="form-actions">
           <button className="filled-action" disabled={saving} type="submit">
-            {saving ? 'Saving...' : 'Create Mission'}
+            {saving ? 'Saving...' : editingMissionId ? 'Update Mission' : 'Create Mission'}
           </button>
         </div>
       </form>
@@ -83,8 +117,11 @@ function MissionForm({ form, routes, saving, onChange, onSubmit }) {
 export default function MissionPage() {
   const [missions, setMissions] = useState([]);
   const [routes, setRoutes] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [missionForm, setMissionForm] = useState(emptyMissionForm);
+  const [editingMissionId, setEditingMissionId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -94,17 +131,24 @@ export default function MissionPage() {
     try {
       setLoading(true);
       setErrorMessage('');
-      const [missionsResponse, routesResponse] = await Promise.all([
-        api.get('/admin/missions?limit=100'),
-        api.get('/admin/routes?limit=100'),
+      const [missionsResponse, routesResponse, categoriesResponse] = await Promise.all([
+        api.get('/admin/missions?limit=50'),
+        api.get('/admin/routes?limit=50'),
+        api.get('/admin/trash-categories?limit=50'),
       ]);
       const nextRoutes = routesResponse.data.routes || [];
+      const nextCategories = (categoriesResponse.data.categories || []).filter(
+        (category) => category.status === 'active'
+      );
 
       setMissions(missionsResponse.data.missions || []);
       setRoutes(nextRoutes);
+      setCategories(nextCategories);
       setMissionForm((currentForm) => ({
         ...currentForm,
         routeId: currentForm.routeId || nextRoutes[0]?.id || '',
+        trashCategoryId: currentForm.trashCategoryId || nextCategories[0]?.id || '',
+        trashCategoryName: currentForm.trashCategoryName || nextCategories[0]?.name || '',
       }));
     } catch (error) {
       setErrorMessage(error.response?.data?.message || 'Unable to load missions.');
@@ -129,6 +173,9 @@ export default function MissionPage() {
     );
   }, [missions, routeNamesById, searchQuery]);
 
+  const activeMissions = missions.filter((mission) => (mission.status || 'active') === 'active');
+  const inactiveMissions = missions.filter((mission) => mission.status === 'archived' || mission.status === 'inactive');
+
   function handleFormChange(event) {
     const { name, value } = event.target;
     setMissionForm((currentForm) => ({ ...currentForm, [name]: value }));
@@ -141,13 +188,25 @@ export default function MissionPage() {
     setSuccessMessage('');
 
     try {
-      const response = await api.post('/admin/missions', missionForm);
-      setMissions((currentMissions) => [response.data.mission, ...currentMissions]);
+      const response = editingMissionId
+        ? await api.patch(`/admin/missions/${editingMissionId}`, missionForm)
+        : await api.post('/admin/missions', missionForm);
+
+      setMissions((currentMissions) => [
+        response.data.mission,
+        ...currentMissions.filter((mission) => mission.id !== response.data.mission.id),
+      ]);
       setMissionForm((currentForm) => ({
         ...emptyMissionForm,
         routeId: currentForm.routeId,
+        trashCategoryId: currentForm.trashCategoryId,
+        trashCategoryName: currentForm.trashCategoryName,
       }));
-      setSuccessMessage('Mission created and saved through the admin API.');
+      setEditingMissionId(null);
+      setShowForm(false);
+      setSuccessMessage(
+        editingMissionId ? 'Mission updated successfully.' : 'Mission created and saved through the admin API.'
+      );
     } catch (error) {
       setErrorMessage(error.response?.data?.message || 'Unable to save mission.');
     } finally {
@@ -155,9 +214,18 @@ export default function MissionPage() {
     }
   }
 
-  async function handleStatusChange(mission, status) {
+  function handleEditMission(mission) {
+    setEditingMissionId(mission.id);
+    setMissionForm(buildMissionForm(mission));
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function handleToggleMission(mission) {
+    const nextStatus = (mission.status || 'active') === 'active' ? 'archived' : 'active';
+
     try {
-      const response = await api.patch(`/admin/missions/${mission.id}`, { status });
+      const response = await api.patch(`/admin/missions/${mission.id}`, { status: nextStatus });
       setMissions((currentMissions) =>
         currentMissions.map((item) => (item.id === mission.id ? response.data.mission : item))
       );
@@ -169,80 +237,124 @@ export default function MissionPage() {
   return (
     <section className="missions-page">
       <Header
-        title="Mission Management"
-        subtitle={`${missions.length} active missions`}
+        actions={
+          <button
+            className="filled-action"
+            onClick={() => {
+              setEditingMissionId(null);
+              setMissionForm({
+                ...emptyMissionForm,
+                routeId: routes[0]?.id || '',
+                trashCategoryId: categories[0]?.id || '',
+                trashCategoryName: categories[0]?.name || '',
+              });
+              setShowForm(true);
+            }}
+            type="button"
+          >
+            + New Mission
+          </button>
+        }
         searchPlaceholder="Search missions..."
         searchValue={searchQuery}
         onSearchChange={(event) => setSearchQuery(event.target.value)}
-        actions={<button className="filled-action" type="button">+ New Mission</button>}
+        subtitle={`${activeMissions.length} active missions across all routes`}
+        title="Mission Management"
       />
 
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
       {successMessage ? <p className="success">{successMessage}</p> : null}
 
-      <MissionForm
-        form={missionForm}
-        routes={routes}
-        saving={saving}
-        onChange={handleFormChange}
-        onSubmit={handleSubmitMission}
-      />
+      {showForm ? (
+        <MissionForm
+          categories={categories}
+          editingMissionId={editingMissionId}
+          form={missionForm}
+          onCancel={() => {
+            setShowForm(false);
+            setEditingMissionId(null);
+          }}
+          onChange={handleFormChange}
+          onSubmit={handleSubmitMission}
+          routes={routes}
+          saving={saving}
+        />
+      ) : null}
+
+      <PageStatRow>
+        <StatCard label="Active Missions" tone="green" value={activeMissions.length} />
+        <StatCard
+          label="Completions"
+          tone="blue"
+          value={missions.reduce((sum, mission) => sum + Number(mission.completedCount || 0), 0) || '—'}
+        />
+        <StatCard
+          label="Points Awarded"
+          tone="yellow"
+          value={missions.reduce((sum, mission) => sum + Number(mission.pointsReward || 0), 0)}
+        />
+        <StatCard label="Inactive" tone="red" value={inactiveMissions.length} />
+      </PageStatRow>
 
       {loading ? (
         <p className="loading-state">Loading missions...</p>
       ) : (
         <section className="mission-grid">
-          {filteredMissions.map((mission) => (
-            <article className="mission-card" key={mission.id}>
-              <div className="mission-card-header">
-                <div>
-                  <h3>{mission.title}</h3>
-                  <span className="mission-category-pill">
-                    {mission.trashCategoryName || 'Collection'}
-                  </span>
-                </div>
-                <span className={`mission-card-badge mission-card-badge-${mission.status || 'active'}`}>
-                  {mission.status || 'active'}
-                </span>
-              </div>
+          {filteredMissions.map((mission) => {
+            const isActive = (mission.status || 'active') === 'active';
+            const routeName = routeNamesById[mission.routeId] || 'Any';
 
-              <div className="mission-card-meta">
-                <div className="mission-card-line">
-                  <span className="mission-card-label">Route</span>
-                  <strong>{routeNamesById[mission.routeId] || mission.routeId || 'Any Route'}</strong>
+            return (
+              <article className="mission-card mission-card-mockup" key={mission.id}>
+                <div className="mission-card-top">
+                  <div className="mission-card-title-block">
+                    <span className="mission-icon-tile">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-8 13-4-4 1.4-1.4 2.6 2.6 5.6-5.6L18 9l-7 7Z" />
+                      </svg>
+                    </span>
+                    <div>
+                      <h3>{mission.title}</h3>
+                      <span className="category-tag">
+                        {mission.trashCategoryName || 'Collection'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    aria-label={isActive ? 'Disable mission' : 'Enable mission'}
+                    className={`mission-toggle${isActive ? ' on' : ''}`}
+                    onClick={() => handleToggleMission(mission)}
+                    type="button"
+                  />
                 </div>
-                <div className="mission-card-line">
-                  <span className="mission-card-label">Category</span>
-                  <strong>{mission.trashCategoryName || mission.trashCategoryId || 'Any Trash'}</strong>
-                </div>
-                <div className="mission-card-line">
-                  <span className="mission-card-label">Goal</span>
-                  <strong>{mission.requiredTrashCount || 0} items</strong>
-                </div>
-                <div className="mission-card-line">
-                  <span className="mission-card-label">Reward</span>
-                  <strong>{mission.pointsReward || 0} pts</strong>
-                </div>
-              </div>
 
-              <div className="mission-card-actions">
-                <button
-                  className="mission-button secondary"
-                  onClick={() => handleStatusChange(mission, 'archived')}
-                  type="button"
-                >
-                  Archive
-                </button>
-                <button
-                  className="mission-button primary"
-                  onClick={() => handleStatusChange(mission, 'active')}
-                  type="button"
-                >
-                  Activate
-                </button>
-              </div>
-            </article>
-          ))}
+                <p className="mission-card-desc">
+                  Collect {mission.requiredTrashCount || 0}{' '}
+                  {mission.trashCategoryName || 'trash items'} on {routeName}.
+                </p>
+
+                <div className="mission-card-footer-mockup">
+                  <div className="mission-card-footer-meta">
+                    <PointsValue value={mission.pointsReward} />
+                    <span>{routeName}</span>
+                    <span>{mission.completedCount ?? 0} completed</span>
+                  </div>
+                  <div className="table-actions">
+                    <IconActionButton
+                      label="Edit mission"
+                      onClick={() => handleEditMission(mission)}
+                      variant="edit"
+                    />
+                    <IconActionButton
+                      label="Archive mission"
+                      onClick={() => handleToggleMission(mission)}
+                      variant="delete"
+                    />
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </section>
       )}
     </section>

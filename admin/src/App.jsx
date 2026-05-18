@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 
 import AdminLayout from './components/AdminLayout';
+import AuthBrandPanel from './components/AuthBrandPanel';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
@@ -11,20 +12,17 @@ import RegisterPage from './pages/RegisterPage';
 import RewardsPage from './pages/RewardsPage';
 import RoutePage from './pages/RoutePage';
 import UsersPage from './pages/UsersPage';
+import TrashCategoriesPage from './pages/TrashCategoriesPage';
 import VerificationPage from './pages/VerificationPage';
 import { auth } from './services/firebase';
 
 function LoadingScreen() {
   return (
-    <main className="auth-shell">
-      <aside className="auth-brand-panel">
-        <div className="auth-brand-content">
-          <img alt="Eco Quest" className="auth-brand-logo" src="/eco-logo.svg" />
-          <p className="auth-brand-name">Eco Quest</p>
-        </div>
-      </aside>
+    <main className="auth-shell auth-shell-loading">
+      <AuthBrandPanel />
       <section className="auth-form-panel">
         <div className="auth-card auth-loading">
+          <div className="auth-loading-spinner" aria-hidden="true" />
           <h1>Checking your session</h1>
           <p className="muted">Connecting to Firebase authentication...</p>
         </div>
@@ -35,7 +33,12 @@ function LoadingScreen() {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
+  const [adminProfile, setAdminProfile] = useState(null);
   const [authReady, setAuthReady] = useState(false);
+
+  const handleProfileReady = useCallback((profile) => {
+    setAdminProfile(profile);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -68,15 +71,16 @@ export default function App() {
         <Route
           path="/"
           element={
-            <ProtectedRoute currentUser={currentUser}>
-              <AdminLayout />
+            <ProtectedRoute currentUser={currentUser} onProfileReady={handleProfileReady}>
+              <AdminLayout adminProfile={adminProfile} currentUser={currentUser} />
             </ProtectedRoute>
           }
         >
-          <Route index element={<DashboardPage currentUser={currentUser} />} />
+          <Route index element={<DashboardPage adminProfile={adminProfile} />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="routes" element={<RoutePage />} />
           <Route path="missions" element={<MissionPage />} />
+          <Route path="categories" element={<TrashCategoriesPage />} />
           <Route path="verification" element={<VerificationPage />} />
           <Route path="rewards" element={<RewardsPage />} />
         </Route>

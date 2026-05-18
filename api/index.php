@@ -19,13 +19,18 @@ error_reporting(E_ALL);
 require_once './config/DatabaseConnection.php';
 require_once './controllers/UserController.php';
 require_once './controllers/MissionController.php'; // Added Mission Controller inclusion
+require_once './controllers/RouteController.php';
+
+
 
 $database = new DatabaseConnection();
 $dbConn = $database->getConnection();
 
 // Instantiate Controllers
 $userController = new UserController($dbConn);
+$routeController = new RouteController($dbConn);
 $missionController = new MissionController($dbConn); // Added Mission Controller instance
+
 
 $endpoint = $_GET['endpoint'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -144,13 +149,47 @@ elseif ($endpoint === 'missions') {
             http_response_code(405);
             echo json_encode(["message" => "Method Not Allowed"]);
             break;
+
+    }
+
+} // Inside index.php handling the endpoints array matrix
+elseif ($endpoint === 'routes') {
+    switch ($method) {
+        case 'GET':
+            if ($id !== null) {
+                echo json_encode($routeController->getRouteDetails($id));
+            } else {
+                echo json_encode($routeController->getAllRoutes());
+            }
+            break;
+
+        case 'POST':
+            $data = json_decode(file_get_contents("php://input"), true);
+            echo json_encode($routeController->createRoute($data));
+            break;
+
+        case 'PUT':
+            $data = json_decode(file_get_contents("php://input"), true);
+            if ($id === null) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Missing identification parameter key."]);
+                break;
+            }
+            echo json_encode($routeController->updateRoute($id, $data));
+            break;
+
         case 'DELETE':
             if ($id === null) {
                 http_response_code(400);
-                echo json_encode(["success" => false, "message" => "Bad Request: Missing mission ID for deletion."]);
+                echo json_encode(["success" => false, "message" => "Missing Route ID Query Key."]);
                 break;
             }
-            echo json_encode($missionController->deleteMission($id));
+            echo json_encode($routeController->deleteRoute($id));
+            break;
+
+        default:
+            http_response_code(405);
+            echo json_encode(["message" => "Method Not Allowed"]);
             break;
     }
 } else {

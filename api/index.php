@@ -105,11 +105,9 @@ elseif ($endpoint === 'missions') {
 
         case 'POST':
             $data = json_decode(file_get_contents("php://input"), true);
-            if (method_exists($missionController, 'createMission')) {
-                echo json_encode($missionController->createMission($data));
-            } else {
-                echo json_encode(["message" => "Create action not implemented yet."]);
-            }
+
+            // Call the newly created controller method safely
+            echo json_encode($missionController->createMission($data));
             break;
 
         case 'PUT':

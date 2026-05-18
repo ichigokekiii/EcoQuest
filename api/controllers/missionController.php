@@ -65,4 +65,40 @@ class MissionController
         }
         return ["success" => false, "message" => "Failed to delete mission."];
     }
+
+    public function createMission($data)
+    {
+        // Validate required fields
+        if (empty($data['title']) || empty($data['requirement'])) {
+            return ["success" => false, "message" => "Title and Requirement are required fields."];
+        }
+
+        // fallback values if fields aren't supplied
+        $status = $data['status'] ?? 'Active';
+        $dateRange = $data['date_range'] ?? 'Oct 12 - Oct 14';
+        $xpReward = isset($data['xp_reward']) ? intval($data['xp_reward']) : 0;
+        $routeId = isset($data['route_id']) ? intval($data['route_id']) : null;
+
+        $query = "INSERT INTO " . $this->table . " (title, description, points_reward, status, date_range, route_id) 
+              VALUES (:title, :requirement, :xp_reward, :status, :date_range, :route_id)";
+
+        $stmt = $this->db->prepare($query);
+
+        $stmt->bindParam(':title', $data['title']);
+        $stmt->bindParam(':requirement', $data['requirement']);
+        $stmt->bindParam(':xp_reward', $xpReward, PDO::PARAM_INT);
+        $stmt->bindParam(':status', $status);
+        $stmt->bindParam(':date_range', $dateRange);
+
+        if ($routeId !== null) {
+            $stmt->bindParam(':route_id', $routeId, PDO::PARAM_INT);
+        } else {
+            $stmt->bindValue(':route_id', null, PDO::PARAM_NULL);
+        }
+
+        if ($stmt->execute()) {
+            return ["success" => true, "message" => "Mission created successfully."];
+        }
+        return ["success" => false, "message" => "Failed to create mission table entry."];
+    }
 }

@@ -1,136 +1,173 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, radius } from '../../src/constants/theme';
+import { useFocusEffect } from 'expo-router';
+
 import Card from '../../src/components/Card';
+import { spacing, radius } from '../../src/constants/theme';
+import { getMissionsData } from '../../src/services/api';
 
-const mockActiveMissions = [
-  { id: 'a1', title: 'Plastic Patrol', subtitle: 'Collect 5 plastic bottles', points: 50, current: 3, target: 5 },
-  { id: 'a2', title: 'Trail Guardian', subtitle: 'Complete 3 routes this week', points: 150, current: 1, target: 3 },
-  { id: 'a3', title: 'Big Haul', subtitle: 'Collect 30 trash items total', points: 200, current: 22, target: 30 },
-];
+const tabs = ['Active', 'Completed', 'All'];
 
-const mockCompletedMissions = [
-  { id: 'c1', title: 'First Steps', subtitle: 'Completed your first route', points: 100 },
-  { id: 'c2', title: 'Paper Chase', subtitle: 'Collected 3 paper items', points: 30 },
-];
+function getProgressPercent(mission) {
+  if (!mission?.target) {
+    return 0;
+  }
+
+  return Math.min(((mission.current || 0) / mission.target) * 100, 100);
+}
 
 export default function MissionsScreen() {
-  const [activeTab, setActiveTab] = useState('Active'); // 'Active', 'Completed', 'All'
+  const [activeTab, setActiveTab] = useState('Active');
+  const [missionsData, setMissionsData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const renderActiveMission = (mission) => {
-    const progressPercent = (mission.current / mission.target) * 100;
-    return (
-      <Card key={mission.id} style={styles.missionCard}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.iconCircleLight}>
-            <Feather name="target" size={20} color="#16A34A" />
-          </View>
-          <View style={styles.cardTextContent}>
-            <Text style={styles.missionTitle}>{mission.title}</Text>
-            <Text style={styles.missionSubtitle}>{mission.subtitle}</Text>
-          </View>
-          <View style={styles.pointsWrapper}>
-            <Feather name="zap" size={14} color="#16A34A" />
-            <Text style={styles.pointsText}>+{mission.points}</Text>
-          </View>
-        </View>
-        <View style={styles.progressRow}>
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-          </View>
-          <Text style={styles.progressFraction}>{mission.current}/{mission.target}</Text>
-        </View>
-      </Card>
-    );
-  };
+  const loadMissions = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorMessage('');
+      const response = await getMissionsData();
+      setMissionsData(response);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Unable to load missions right now.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const renderCompletedMission = (mission) => {
-    return (
-      <Card key={mission.id} style={styles.missionCard}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.iconCircleSolid}>
-            <Feather name="check" size={20} color="#FFFFFF" />
-          </View>
-          <View style={styles.cardTextContent}>
-            <Text style={styles.missionTitleCompleted}>{mission.title}</Text>
-            <Text style={styles.missionSubtitleCompleted}>{mission.subtitle}</Text>
-          </View>
-          <View style={styles.pointsBadge}>
-            <Feather name="zap" size={12} color="#16A34A" />
-            <Text style={styles.pointsBadgeText}>+{mission.points}</Text>
-          </View>
-        </View>
-      </Card>
-    );
-  };
+  useFocusEffect(
+    useCallback(() => {
+      loadMissions();
+    }, [loadMissions])
+  );
+
+  const activeMissions = missionsData?.active || [];
+  const completedMissions = missionsData?.completed || [];
+  const allMissions = missionsData?.all || [];
+  const weeklyProgress = missionsData?.weeklyProgress || {};
+
+  const visibleMissions = useMemo(() => {
+    if (activeTab === 'Active') {
+      return activeMissions;
+    }
+
+    if (activeTab === 'Completed') {
+      return completedMissions;
+    }
+
+    return allMissions;
+  }, [activeMissions, activeTab, allMissions, completedMissions]);
+
+  const weeklyCompletionPercent =
+    weeklyProgress.totalMissions > 0
+      ? Math.min((weeklyProgress.completedMissions / weeklyProgress.totalMissions) * 100, 100)
+      : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Missions</Text>
           <View style={styles.doneBadge}>
             <Feather name="check" size={14} color="#16A34A" />
-            <Text style={styles.doneBadgeText}>{mockCompletedMissions.length} Done</Text>
+            <Text style={styles.doneBadgeText}>{completedMissions.length} Done</Text>
           </View>
         </View>
 
-        {/* Weekly Progress Card */}
         <View style={styles.weeklyProgressCard}>
           <View style={styles.weeklyHeaderRow}>
             <Text style={styles.weeklyTitle}>Weekly Progress</Text>
-            <Text style={styles.weeklyPointsText}>380 / 500 pts</Text>
+            <Text style={styles.weeklyPointsText}>
+              {Number(weeklyProgress.totalPoints || 0).toLocaleString()} pts
+            </Text>
           </View>
           <View style={styles.weeklyProgressBarBg}>
-            <View style={[styles.weeklyProgressBarFill, { width: '76%' }]} />
+            <View style={[styles.weeklyProgressBarFill, { width: `${weeklyCompletionPercent}%` }]} />
           </View>
-          <Text style={styles.weeklyFooterText}>120 pts more to unlock weekly reward</Text>
+          <Text style={styles.weeklyFooterText}>
+            {weeklyProgress.completedMissions || 0} of {weeklyProgress.totalMissions || 0} missions completed this week
+          </Text>
+          <Text style={styles.weeklyFooterText}>
+            {weeklyProgress.approvedTrashCount || 0} approved items contributed so far
+          </Text>
         </View>
 
-        {/* Tab Selector */}
         <View style={styles.tabSelector}>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'Active' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('Active')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Active' && styles.tabTextActive]}>Active ({mockActiveMissions.length})</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'Completed' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('Completed')}
-          >
-            <Text style={[styles.tabText, activeTab === 'Completed' && styles.tabTextActive]}>Completed ({mockCompletedMissions.length})</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tabButton, activeTab === 'All' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('All')}
-          >
-            <Text style={[styles.tabText, activeTab === 'All' && styles.tabTextActive]}>All</Text>
-          </TouchableOpacity>
+          {tabs.map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab}
+                {tab === 'Active' ? ` (${activeMissions.length})` : ''}
+                {tab === 'Completed' ? ` (${completedMissions.length})` : ''}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Mission Lists */}
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
         <View style={styles.listContainer}>
-          {(activeTab === 'Active' || activeTab === 'All') && (
-            <View>
-              {mockActiveMissions.map(renderActiveMission)}
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color="#16A34A" />
             </View>
-          )}
+          ) : visibleMissions.length === 0 ? (
+            <Card>
+              <Text style={styles.emptyStateText}>No missions match this view yet.</Text>
+            </Card>
+          ) : (
+            visibleMissions.map((mission) => {
+              const isCompleted = Boolean(mission.isCompleted);
+              const progressPercent = getProgressPercent(mission);
 
-          {(activeTab === 'Completed' || activeTab === 'All') && (
-            <View style={styles.completedSection}>
-              {(activeTab === 'All' || activeTab === 'Completed') && (
-                <Text style={styles.sectionTitle}>Completed</Text>
-              )}
-              {mockCompletedMissions.map(renderCompletedMission)}
-            </View>
+              return (
+                <Card key={mission.id} style={styles.missionCard}>
+                  <View style={styles.cardHeaderRow}>
+                    <View style={isCompleted ? styles.iconCircleSolid : styles.iconCircleLight}>
+                      <Feather
+                        name={isCompleted ? 'check' : 'target'}
+                        size={20}
+                        color={isCompleted ? '#FFFFFF' : '#16A34A'}
+                      />
+                    </View>
+                    <View style={styles.cardTextContent}>
+                      <Text style={isCompleted ? styles.missionTitleCompleted : styles.missionTitle}>
+                        {mission.title}
+                      </Text>
+                      <Text style={isCompleted ? styles.missionSubtitleCompleted : styles.missionSubtitle}>
+                        {mission.subtitle}
+                      </Text>
+                      <Text style={styles.routeNameText}>{mission.routeName}</Text>
+                    </View>
+                    <View style={isCompleted ? styles.pointsBadge : styles.pointsWrapper}>
+                      <Feather name="zap" size={14} color="#16A34A" />
+                      <Text style={isCompleted ? styles.pointsBadgeText : styles.pointsText}>
+                        +{mission.pointsReward || 0}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {!isCompleted ? (
+                    <View style={styles.progressRow}>
+                      <View style={styles.progressBarBg}>
+                        <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+                      </View>
+                      <Text style={styles.progressFraction}>
+                        {mission.current || 0}/{mission.target || 0}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Card>
+              );
+            })
           )}
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -207,7 +244,8 @@ const styles = StyleSheet.create({
   },
   weeklyFooterText: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: '#6B7280',
+    lineHeight: 18,
   },
   tabSelector: {
     flexDirection: 'row',
@@ -233,8 +271,23 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#111827',
   },
+  errorText: {
+    color: '#EF4444',
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    fontSize: 14,
+  },
   listContainer: {
     paddingHorizontal: spacing.lg,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
   },
   missionCard: {
     marginBottom: spacing.md,
@@ -266,34 +319,38 @@ const styles = StyleSheet.create({
   },
   missionTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#111827',
-    marginBottom: 2,
-  },
-  missionSubtitle: {
-    fontSize: 13,
-    color: '#9CA3AF',
   },
   missionTitleCompleted: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#9CA3AF',
-    textDecorationLine: 'line-through',
-    marginBottom: 2,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  missionSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
   },
   missionSubtitleCompleted: {
     fontSize: 13,
-    color: '#D1D5DB',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  routeNameText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
   },
   pointsWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   pointsText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#16A34A',
-    marginLeft: 2,
+    marginLeft: 4,
   },
   pointsBadge: {
     flexDirection: 'row',
@@ -301,44 +358,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 999,
   },
   pointsBadgeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 13,
+    fontWeight: '800',
     color: '#16A34A',
-    marginLeft: 2,
+    marginLeft: 4,
   },
   progressRow: {
+    marginTop: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.md,
-    paddingLeft: 60, // Align with text start
   },
   progressBarBg: {
     flex: 1,
-    height: 6,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 3,
+    height: 8,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 4,
     marginRight: spacing.sm,
+    overflow: 'hidden',
   },
   progressBarFill: {
-    height: 6,
+    height: '100%',
     backgroundColor: '#16A34A',
-    borderRadius: 3,
+    borderRadius: 4,
   },
   progressFraction: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+    minWidth: 44,
+    textAlign: 'right',
   },
-  completedSection: {
-    marginTop: spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: spacing.md,
-  }
 });

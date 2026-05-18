@@ -10,9 +10,9 @@ export default function AdminLayout({ adminProfile, currentUser }) {
   }
 
   return (
-    <div className="app-shell">
+    <div className="flex min-h-screen bg-page">
       <Sidebar adminProfile={adminProfile} currentUser={currentUser} onLogout={handleLogout} />
-      <main className="main-panel">
+      <main className="flex min-w-0 flex-1 flex-col px-8 pb-8 pt-8">
         <Outlet />
       </main>
     </div>

@@ -22,9 +22,11 @@ const rewardIcons = ['🎁', '💧', '🎟️', '🌿', '👕', '🧢'];
 
 export default function RewardsPage() {
   const [rewards, setRewards] = useState([]);
+  const [redemptions, setRedemptions] = useState([]);
   const [rewardForm, setRewardForm] = useState(emptyRewardForm);
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingRewardId, setEditingRewardId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -34,8 +36,12 @@ export default function RewardsPage() {
     try {
       setLoading(true);
       setErrorMessage('');
-      const response = await api.get('/admin/rewards?limit=50');
-      setRewards(response.data.rewards || []);
+      const [rewardsResponse, redemptionsResponse] = await Promise.all([
+        api.get('/admin/rewards?limit=50'),
+        api.get('/admin/redemptions?limit=20'),
+      ]);
+      setRewards(rewardsResponse.data.rewards || []);
+      setRedemptions(redemptionsResponse.data.redemptions || []);
     } catch (error) {
       setErrorMessage(error.response?.data?.message || 'Unable to load rewards.');
     } finally {
@@ -67,6 +73,12 @@ export default function RewardsPage() {
     setRewardForm((currentForm) => ({ ...currentForm, [name]: value }));
   }
 
+  function resetRewardEditor() {
+    setRewardForm(emptyRewardForm);
+    setEditingRewardId(null);
+    setShowForm(false);
+  }
+
   async function handleSubmitReward(event) {
     event.preventDefault();
     setSaving(true);
@@ -74,11 +86,17 @@ export default function RewardsPage() {
     setSuccessMessage('');
 
     try {
-      const response = await api.post('/admin/rewards', rewardForm);
-      setRewards((currentRewards) => [response.data.reward, ...currentRewards]);
-      setRewardForm(emptyRewardForm);
-      setShowForm(false);
-      setSuccessMessage('Reward saved through the admin API.');
+      const response = editingRewardId
+        ? await api.patch(`/admin/rewards/${editingRewardId}`, rewardForm)
+        : await api.post('/admin/rewards', rewardForm);
+
+      setRewards((currentRewards) =>
+        editingRewardId
+          ? currentRewards.map((item) => (item.id === editingRewardId ? response.data.reward : item))
+          : [response.data.reward, ...currentRewards]
+      );
+      resetRewardEditor();
+      setSuccessMessage(editingRewardId ? 'Reward updated through the admin API.' : 'Reward saved through the admin API.');
     } catch (error) {
       setErrorMessage(error.response?.data?.message || 'Unable to save reward.');
     } finally {
@@ -97,6 +115,22 @@ export default function RewardsPage() {
     } catch (error) {
       setErrorMessage(error.response?.data?.message || 'Unable to update reward.');
     }
+  }
+
+  function handleEditReward(reward) {
+    setRewardForm({
+      name: reward.name || '',
+      description: reward.description || '',
+      pointsCost: String(reward.pointsCost ?? 0),
+      stock: String(reward.stock ?? 0),
+      status: reward.status || 'active',
+      category: reward.category || '',
+      imageUrl: reward.imageUrl || '',
+    });
+    setEditingRewardId(reward.id);
+    setShowForm(true);
+    setSuccessMessage('');
+    setErrorMessage('');
   }
 
   return (
@@ -121,10 +155,10 @@ export default function RewardsPage() {
         <section className="data-card page-form-card collapsible-form">
           <div className="section-head">
             <div>
-              <h2>Add Reward</h2>
-              <p>New rewards become available to the shared store data model.</p>
+              <h2>{editingRewardId ? 'Edit Reward' : 'Add Reward'}</h2>
+              <p>{editingRewardId ? 'Update the selected reward in Firebase.' : 'New rewards become available to the shared store data model.'}</p>
             </div>
-            <button className="outline-action" onClick={() => setShowForm(false)} type="button">
+            <button className="outline-action" onClick={resetRewardEditor} type="button">
               Close
             </button>
           </div>
@@ -162,7 +196,7 @@ export default function RewardsPage() {
             </label>
             <div className="form-actions">
               <button className="filled-action" disabled={saving} type="submit">
-                {saving ? 'Saving...' : 'Add Reward'}
+                {saving ? 'Saving...' : editingRewardId ? 'Save Changes' : 'Add Reward'}
               </button>
             </div>
           </form>
@@ -223,9 +257,13 @@ export default function RewardsPage() {
                       <strong>{reward.redeemedCount ?? 0} redeemed</strong>
                     </div>
                     <div className="table-actions">
-                      <IconActionButton label="Edit reward" variant="edit" />
                       <IconActionButton
-                        label="Archive reward"
+                        label="Edit reward"
+                        onClick={() => handleEditReward(reward)}
+                        variant="edit"
+                      />
+                      <IconActionButton
+                        label={reward.status === 'archived' ? 'Activate reward' : 'Archive reward'}
                         onClick={() => handleToggleReward(reward)}
                         variant="delete"
                       />
@@ -237,6 +275,41 @@ export default function RewardsPage() {
           })}
         </section>
       )}
+
+      <section className="data-card">
+        <div className="section-head">
+          <div>
+            <h2>Recent Redemptions</h2>
+            <p>Live reward claims flowing through Firebase.</p>
+          </div>
+        </div>
+        {redemptions.length === 0 ? (
+          <p className="empty-state">No reward redemptions yet.</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Reward</th>
+                <th>User</th>
+                <th>Points</th>
+                <th>Status</th>
+                <th>Redeemed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {redemptions.slice(0, 10).map((redemption) => (
+                <tr key={redemption.id}>
+                  <td>{redemption.rewardName || redemption.rewardId || 'Reward redemption'}</td>
+                  <td>{redemption.userName || redemption.userId || 'EcoQuest User'}</td>
+                  <td><PointsValue value={-Number(redemption.pointsCost || 0)} /></td>
+                  <td>{redemption.status || 'pending'}</td>
+                  <td>{new Date(redemption.redeemedAt || redemption.createdAt || redemption.updatedAt || Date.now()).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
     </section>
   );
 }

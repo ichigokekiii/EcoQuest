@@ -32,16 +32,23 @@ export default function RegisterPage() {
 
       <section className="auth-form-panel">
         <div className="auth-card">
-          <div className="auth-card-intro">
-            <img alt="" aria-hidden="true" className="auth-card-mark" src="/eco-logo-mint.svg" />
+          <div className="mb-6 flex items-center gap-3.5">
+            <img
+              alt=""
+              aria-hidden="true"
+              className="h-12 w-12 shrink-0 rounded-[14px] shadow-sm"
+              src="/eco-logo-mint.svg"
+            />
             <div>
-              <p className="auth-card-welcome">Join Eco Quest</p>
-              <h1>Create your account</h1>
+              <p className="mb-0.5 text-sm font-semibold text-gray-500">Join Eco Quest</p>
+              <h1 className="m-0 text-[1.65rem] font-extrabold leading-tight tracking-tight text-gray-900">
+                Create your account
+              </h1>
             </div>
           </div>
 
-          <form className="stack auth-form" onSubmit={handleSubmit}>
-            <label className="field">
+          <form className="grid gap-4" onSubmit={handleSubmit}>
+            <label className="auth-field">
               <span>Full Name</span>
               <input
                 autoComplete="name"
@@ -53,7 +60,7 @@ export default function RegisterPage() {
               />
             </label>
 
-            <label className="field">
+            <label className="auth-field">
               <span>Email</span>
               <input
                 autoComplete="email"
@@ -65,7 +72,7 @@ export default function RegisterPage() {
               />
             </label>
 
-            <label className="field">
+            <label className="auth-field">
               <span>Password</span>
               <input
                 autoComplete="new-password"
@@ -77,7 +84,7 @@ export default function RegisterPage() {
               />
             </label>
 
-            <label className="field">
+            <label className="auth-field">
               <span>Confirm Password</span>
               <input
                 autoComplete="new-password"
@@ -89,20 +96,23 @@ export default function RegisterPage() {
               />
             </label>
 
-            {errorMessage ? <p className="error">{errorMessage}</p> : null}
-            {infoMessage ? <p className="success">{infoMessage}</p> : null}
+            {errorMessage ? <p className="text-sm text-red-500">{errorMessage}</p> : null}
+            {infoMessage ? <p className="text-sm text-mint-deep">{infoMessage}</p> : null}
 
             <button className="auth-submit" type="submit">
               Create Account
             </button>
           </form>
 
-          <p className="auth-switch">
-            Already have an account? <Link to="/login">Log in</Link>
+          <p className="mt-4 text-center text-sm text-gray-500">
+            Already have an account?{' '}
+            <Link className="font-bold text-mint" to="/login">
+              Log in
+            </Link>
           </p>
         </div>
 
-        <footer className="auth-footer">
+        <footer className="absolute bottom-5 left-0 right-0 flex justify-between px-8 text-xs text-gray-400">
           <span>© 2026 Eco Quest</span>
           <span>Admin Console</span>
         </footer>

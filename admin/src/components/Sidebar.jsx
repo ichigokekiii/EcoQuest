@@ -1,63 +1,24 @@
 import { NavLink } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Map, 
+  Target, 
+  Trash2, 
+  CheckSquare, 
+  Gift, 
+  LogOut 
+} from "lucide-react";
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: 'grid', end: true },
-  { to: '/users', label: 'Users', icon: 'users' },
-  { to: '/routes', label: 'Routes', icon: 'route' },
-  { to: '/missions', label: 'Missions', icon: 'mission' },
-  { to: '/categories', label: 'Trash Categories', icon: 'category' },
-  { to: '/verification', label: 'Trash Reviews', icon: 'check' },
-  { to: '/rewards', label: 'Rewards', icon: 'award' },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/users', label: 'Users', icon: Users },
+  { to: '/routes', label: 'Routes', icon: Map },
+  { to: '/missions', label: 'Missions', icon: Target },
+  { to: '/categories', label: 'Trash Categories', icon: Trash2 },
+  { to: '/verification', label: 'Trash Reviews', icon: CheckSquare },
+  { to: '/rewards', label: 'Rewards', icon: Gift },
 ];
-
-function Icon({ name }) {
-  switch (name) {
-    case 'grid':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z" />
-        </svg>
-      );
-    case 'users':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-8 2c-3.9 0-7 2.2-7 5v1h14v-1c0-2.8-3.1-5-7-5Zm8 0c-.5 0-1 .1-1.5.2A7 7 0 0 1 19 18v1h5v-1c0-2.2-1.8-4-4-4Z" />
-        </svg>
-      );
-    case 'route':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 18a3 3 0 1 1 0-6c1.1 0 2.1.6 2.6 1.5h3.8A6 6 0 0 0 18 7a3 3 0 1 1 0-3 6 6 0 0 0-5.6 4.5H8.6A3 3 0 1 0 6 12h12a3 3 0 1 1 0 6H6Z" />
-        </svg>
-      );
-    case 'mission':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm0 16H5V5h14v14Zm-5-6.7-2.8-3.6-2.1 1.7 4 5.2 6-6-1.4-1.4-3.7 4.1Z" />
-        </svg>
-      );
-    case 'check':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-8 13-4-4 1.4-1.4 2.6 2.6 5.6-5.6L18 9l-7 7Z" />
-        </svg>
-      );
-    case 'category':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 3h7v4h-7v-4Z" />
-        </svg>
-      );
-    case 'award':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 2a7 7 0 0 0-4.3 12.5L6.5 22l5.5-3 5.5 3-1.2-7.5A7 7 0 0 0 12 2Zm0 10.5A3.5 3.5 0 1 1 12 5a3.5 3.5 0 0 1 0 7.5Z" />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
 
 function getDisplayName(profile, firebaseUser) {
   return profile?.fullName || firebaseUser?.displayName || firebaseUser?.email || 'Admin User';
@@ -76,60 +37,67 @@ function formatRole(profile) {
   if (profile?.role === 'admin') {
     return 'Administrator';
   }
-
   return profile?.role || 'User';
 }
 
 export default function Sidebar({ adminProfile, currentUser, onLogout }) {
   const displayName = getDisplayName(adminProfile, currentUser);
+
+  const baseClass =
+    "flex items-center gap-3 px-6 py-3.5 text-[0.85rem] font-medium text-gray-500 border-l-4 border-transparent transition-all duration-200 hover:bg-[#dcfce7]/50 hover:text-[#15803d]";
+
+  const activeClass =
+    "flex items-center gap-3 px-6 py-3.5 text-[0.85rem] font-bold bg-[#dcfce7] text-[#15803d] border-l-4 border-[#22c55e]";
+
   return (
-    <aside className="sidebar">
-      <div className="brand-block">
-        <img alt="Eco Quest" className="brand-mark-img" src="/eco-logo-mint.svg" />
+    <aside className="sticky top-0 flex h-screen w-64 flex-col bg-white border-r border-gray-100 transition-all duration-300 shrink-0">
+      {/* Logo Area */}
+      <div className="flex h-[72px] items-center gap-3 border-b border-gray-100 px-6">
+        <img alt="Eco Quest" className="h-9 w-9" src="/eco-logo-mint.svg" />
         <div>
-          <p className="brand-name">Eco Quest</p>
-          <p className="brand-role">Admin Console</p>
+          <p className="text-[0.95rem] font-bold text-gray-900 leading-tight">Eco Quest</p>
+          <p className="text-xs text-gray-500 font-medium">Admin Console</p>
         </div>
       </div>
 
-      <p className="sidebar-menu-label">Menu</p>
-
-      <nav className="sidebar-nav" aria-label="Admin navigation">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-            end={item.end}
-            to={item.to}
-          >
-            <span className="nav-icon">
-              <Icon name={item.icon} />
-            </span>
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-4">
+        <ul className="flex flex-col">
+          {navItems.map((item) => {
+            const IconComponent = item.icon;
+            return (
+              <NavLink 
+                key={item.to} 
+                end={item.end} 
+                to={item.to}
+                className={({ isActive }) => (isActive ? activeClass : baseClass)}
+              >
+                <IconComponent className="h-5 w-5" />
+                {item.label}
+              </NavLink>
+            );
+          })}
+        </ul>
       </nav>
 
-      <div className="sidebar-footer">
-        <div className="sidebar-user">
-          <span className="profile-avatar">{getInitials(displayName)}</span>
-          <div>
-            <p className="sidebar-user-name">{displayName}</p>
-            <p className="sidebar-user-role">{formatRole(adminProfile)}</p>
+      {/* User Profile Footer */}
+      <div className="mt-auto border-t border-gray-100 bg-gray-50/50">
+        <div className="flex items-center gap-3 px-6 py-5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dcfce7] text-xs font-bold text-[#15803d]">
+            {getInitials(displayName)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[0.85rem] font-semibold text-gray-900">{displayName}</p>
+            <p className="text-xs text-gray-500">{formatRole(adminProfile)}</p>
           </div>
           <button
             aria-label="Logout"
-            className="sidebar-logout"
+            className="ml-auto rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500"
             onClick={onLogout}
             title="Logout"
             type="button"
           >
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path
-                d="m10 17.3 5.3-5.3L10 6.8l1.4-1.4 6.7 6.6-6.7 6.7L10 17.3ZM6 5h2v14H6z"
-                fill="currentColor"
-              />
-            </svg>
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>

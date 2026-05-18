@@ -1,6 +1,10 @@
 const { admin, getDb, isFirebaseConfigured } = require('../config/firebaseAdmin');
 const { serializeDoc, serializeRoute } = require('../utils/firestoreSerializers');
 const { getAdminDashboardData } = require('../mock/mockData');
+const {
+  attachRewardRedemptionStats,
+  listRedemptions,
+} = require('../services/redemptionService');
 
 function parseLimit(rawLimit, fallback = 10) {
   const limit = Number.parseInt(rawLimit, 10);
@@ -78,6 +82,7 @@ async function getAdminDashboard(req, res, next) {
       activeSessionsSnapshot,
       submissionsSnapshot,
       pendingSubmissionsSnapshot,
+      redemptionsSnapshot,
     ] = await Promise.all([
       db.collection('users').get(),
       db.collection('users').where('status', '==', 'active').get(),
@@ -88,7 +93,12 @@ async function getAdminDashboard(req, res, next) {
       db.collection('routeSessions').where('status', '==', 'active').get(),
       db.collection('trashSubmissions').get(),
       db.collection('trashSubmissions').where('status', '==', 'pending').get(),
+      db.collection('redemptions').get(),
     ]);
+    const totalPointsRedeemed = redemptionsSnapshot.docs.reduce((total, redemptionDoc) => {
+      const redemption = redemptionDoc.data();
+      return total + (redemption.status === 'cancelled' ? 0 : Number(redemption.pointsSpent || 0));
+    }, 0);
 
     return res.json({
       admin: {
@@ -106,6 +116,8 @@ async function getAdminDashboard(req, res, next) {
         activeRouteSessions: activeSessionsSnapshot.size,
         trashSubmissions: submissionsSnapshot.size,
         pendingSubmissions: pendingSubmissionsSnapshot.size,
+        redemptions: redemptionsSnapshot.size,
+        pointsRedeemed: totalPointsRedeemed,
       },
     });
   } catch (error) {
@@ -272,6 +284,44 @@ async function updateAdminRoute(req, res, next) {
     return res.json({
       message: 'Route updated',
       route: serializeRoute(updatedRoute),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteAdminRoute(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      return res.status(503).json({ message: 'Firebase is not configured for route writes.' });
+    }
+
+    const routeId = req.params.routeId;
+    const routeRef = getDb().collection('routes').doc(routeId);
+    const existingRoute = await routeRef.get();
+
+    if (!existingRoute.exists) {
+      return res.status(404).json({ message: 'Route not found' });
+    }
+
+    const activeSessionSnapshot = await getDb()
+      .collection('routeSessions')
+      .where('routeId', '==', routeId)
+      .where('status', '==', 'active')
+      .limit(1)
+      .get();
+
+    if (!activeSessionSnapshot.empty) {
+      return res.status(409).json({
+        message: 'Cannot delete a route while a user has an active session on it.',
+      });
+    }
+
+    await routeRef.delete();
+
+    return res.json({
+      message: 'Route deleted',
+      routeId,
     });
   } catch (error) {
     next(error);
@@ -695,10 +745,34 @@ async function listAdminRewards(req, res, next) {
       return res.json({ rewards: getAdminDashboardData().rewards || [] });
     }
 
-    const snapshot = await getDb().collection('rewards').limit(parseLimit(req.query.limit, 50)).get();
-    const rewards = sortByUpdatedAt(snapshot.docs.map(serializeDoc));
+    const [snapshot, redemptions] = await Promise.all([
+      getDb().collection('rewards').limit(parseLimit(req.query.limit, 50)).get(),
+      listRedemptions({ limit: 500 }),
+    ]);
+    const rewards = sortByUpdatedAt(
+      attachRewardRedemptionStats(snapshot.docs.map(serializeDoc), redemptions)
+    );
 
     return res.json({ rewards });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function listAdminRedemptions(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      return res.json({ redemptions: getAdminDashboardData().redemptions || [] });
+    }
+
+    const redemptions = await listRedemptions({
+      limit: req.query.limit || 50,
+      userId: req.query.userId,
+      rewardId: req.query.rewardId,
+      status: req.query.status,
+    });
+
+    return res.json({ redemptions });
   } catch (error) {
     next(error);
   }
@@ -765,9 +839,11 @@ module.exports = {
   createAdminMission,
   createAdminReward,
   createAdminRoute,
+  deleteAdminRoute,
   createAdminTrashCategory,
   getAdminDashboard,
   listAdminMissions,
+  listAdminRedemptions,
   listAdminRewards,
   listAdminTrashCategories,
   listAdminUsers,

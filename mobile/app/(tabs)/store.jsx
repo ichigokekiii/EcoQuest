@@ -1,115 +1,199 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, radius } from '../../src/constants/theme';
+import { useFocusEffect } from 'expo-router';
+
 import Card from '../../src/components/Card';
+import { spacing, radius } from '../../src/constants/theme';
+import { getStoreData, redeemReward } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
 
-const mockStoreItems = [
-  { id: '1', title: 'Eco Water Bottle', category: 'Gear', points: 500, affordable: true, icon: 'droplet' },
-  { id: '2', title: 'Trail Snack Pack', category: 'Food', points: 300, affordable: true, icon: 'award' },
-  { id: '3', title: 'Plant a Tree', category: 'Impact', points: 800, affordable: false, icon: 'globe' },
-  { id: '4', title: 'Eco Tote Bag', category: 'Gear', points: 250, affordable: true, icon: 'shopping-bag' },
-  { id: '5', title: 'Coffee Voucher', category: 'Food', points: 400, affordable: true, icon: 'star' },
-  { id: '6', title: 'Campus Hoodie', category: 'Apparel', points: 1200, affordable: false, icon: 'award' },
-];
-
-const filters = ['All', 'Gear', 'Food', 'Impact', 'Apparel'];
+function getRewardIcon(category) {
+  switch ((category || '').toLowerCase()) {
+    case 'gear':
+      return 'shopping-bag';
+    case 'food':
+      return 'coffee';
+    case 'impact':
+      return 'globe';
+    case 'apparel':
+      return 'award';
+    default:
+      return 'gift';
+  }
+}
 
 export default function StoreScreen() {
+  const [storeData, setStoreData] = useState(null);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [redeemingId, setRedeemingId] = useState(null);
+
+  const loadStore = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorMessage('');
+      const response = await getStoreData();
+      setStoreData(response);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Unable to load store items right now.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStore();
+    }, [loadStore])
+  );
+
+  const pointsBalance = Number(storeData?.pointsBalance || 0);
+  const rewards = storeData?.rewards || [];
+  const recentRedemptions = storeData?.recentRedemptions || [];
+  const filters = useMemo(() => {
+    const categories = Array.from(new Set(rewards.map((reward) => reward.category).filter(Boolean)));
+    return ['All', ...categories];
+  }, [rewards]);
+  const filteredRewards = rewards.filter(
+    (reward) => activeFilter === 'All' || reward.category === activeFilter
+  );
+
+  async function handleRedeem(reward) {
+    try {
+      setRedeemingId(reward.id);
+      const response = await redeemReward(reward.id);
+      Alert.alert(
+        'Reward redeemed',
+        `${reward.name} is now pending fulfillment. Remaining points: ${Number(response.points || 0).toLocaleString()}`
+      );
+      await loadStore();
+    } catch (error) {
+      Alert.alert(
+        'Redeem failed',
+        error.response?.data?.message || 'Unable to redeem this reward right now.'
+      );
+    } finally {
+      setRedeemingId(null);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Eco Store</Text>
         <View style={styles.pointsBadge}>
           <Feather name="zap" size={16} color="#16A34A" />
-          <Text style={styles.pointsBadgeText}>2,480</Text>
+          <Text style={styles.pointsBadgeText}>{pointsBalance.toLocaleString()}</Text>
           <Text style={styles.pointsBadgeUnit}>pts</Text>
         </View>
       </View>
 
-      {/* Filter Pills */}
       <View style={styles.filterWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScrollContent}>
           {filters.map((filter) => {
             const isActive = activeFilter === filter;
             return (
-              <TouchableOpacity 
-                key={filter} 
+              <TouchableOpacity
+                key={filter}
                 style={[styles.filterPill, isActive && styles.filterPillActive]}
                 onPress={() => setActiveFilter(filter)}
               >
-                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>{filter}</Text>
+                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                  {filter}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         style={styles.mainScrollView}
       >
-        
-        {/* Special Offer Banner */}
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
         <View style={styles.specialOfferContainer}>
           <View style={styles.offerIconWrapper}>
-            <Feather name="award" size={24} color="#FFFFFF" />
+            <Feather name="gift" size={24} color="#FFFFFF" />
           </View>
           <View style={styles.offerTextContent}>
-            <Text style={styles.offerTitle}>Special Offer</Text>
-            <Text style={styles.offerSubtitle}>Plant-a-Tree: 20% off this weekend</Text>
+            <Text style={styles.offerTitle}>Recent redemption activity</Text>
+            <Text style={styles.offerSubtitle}>
+              {recentRedemptions[0]
+                ? `${recentRedemptions[0].rewardName} · ${recentRedemptions[0].status || 'pending'}`
+                : 'Redeem rewards here using your live Firebase points balance.'}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.offerButton}>
-            <Text style={styles.offerButtonText}>View</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* 2-Column Grid */}
-        <View style={styles.gridContainer}>
-          {mockStoreItems.map((item) => (
-            <Card key={item.id} style={styles.itemCard}>
-              <View style={styles.itemCardTop}>
-                <View style={styles.itemIconCircle}>
-                  <Feather name={item.icon} size={24} color="#111827" />
-                </View>
-              </View>
-              
-              <View style={styles.itemCardBottom}>
-                <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.itemCategory}>{item.category}</Text>
-                
-                <View style={styles.itemFooter}>
-                  <View style={styles.itemPointsWrapper}>
-                    <Feather name="zap" size={14} color="#16A34A" />
-                    <Text style={styles.itemPoints}>{item.points}</Text>
-                  </View>
-                  
-                  {item.affordable ? (
-                    <TouchableOpacity style={styles.redeemButton}>
-                      <Text style={styles.redeemButtonText}>Redeem</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={styles.needMoreButton}>
-                      <Text style={styles.needMoreButtonText}>Need more</Text>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color="#16A34A" />
+          </View>
+        ) : filteredRewards.length === 0 ? (
+          <Card>
+            <Text style={styles.emptyStateText}>No rewards match this category yet.</Text>
+          </Card>
+        ) : (
+          <View style={styles.gridContainer}>
+            {filteredRewards.map((item) => {
+              const pointsCost = Number(item.pointsCost || 0);
+              const stock = Number(item.stock || 0);
+              const affordable = pointsBalance >= pointsCost;
+              const canRedeem = affordable && stock > 0 && item.status === 'active';
+
+              return (
+                <Card key={item.id} style={styles.itemCard}>
+                  <View style={styles.itemCardTop}>
+                    <View style={styles.itemIconCircle}>
+                      <Feather name={getRewardIcon(item.category)} size={24} color="#111827" />
                     </View>
-                  )}
-                </View>
-              </View>
-            </Card>
-          ))}
-        </View>
+                  </View>
 
+                  <View style={styles.itemCardBottom}>
+                    <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.itemCategory}>{item.category || 'Reward'}</Text>
+                    <Text style={styles.stockText}>
+                      {stock > 0 ? `${stock} left` : 'Out of stock'}
+                      {item.redeemedCount ? ` · ${item.redeemedCount} redeemed` : ''}
+                    </Text>
+
+                    <View style={styles.itemFooter}>
+                      <View style={styles.itemPointsWrapper}>
+                        <Feather name="zap" size={14} color="#16A34A" />
+                        <Text style={styles.itemPoints}>{pointsCost}</Text>
+                      </View>
+
+                      {canRedeem ? (
+                        <TouchableOpacity
+                          style={styles.redeemButton}
+                          disabled={redeemingId === item.id}
+                          onPress={() => handleRedeem(item)}
+                        >
+                          <Text style={styles.redeemButtonText}>
+                            {redeemingId === item.id ? '...' : 'Redeem'}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.needMoreButton}>
+                          <Text style={styles.needMoreButtonText}>
+                            {stock <= 0 ? 'Sold out' : 'Need more'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -180,13 +264,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   mainScrollView: {
-    backgroundColor: '#F9FAFB', // Light grey background behind grid
+    backgroundColor: '#F9FAFB',
     flex: 1,
   },
   scrollContent: {
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 14,
+    marginBottom: spacing.md,
   },
   specialOfferContainer: {
     flexDirection: 'row',
@@ -219,17 +308,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  offerButton: {
-    backgroundColor: '#16A34A',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginLeft: spacing.sm,
+  loadingContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
   },
-  offerButtonText: {
-    color: '#FFFFFF',
+  emptyStateText: {
+    color: '#6B7280',
     fontSize: 14,
-    fontWeight: 'bold',
+    lineHeight: 20,
   },
   gridContainer: {
     flexDirection: 'row',
@@ -238,7 +324,7 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     width: '48%',
-    padding: 0, // Override default card padding
+    padding: 0,
     overflow: 'hidden',
     marginBottom: spacing.md,
   },
@@ -258,59 +344,62 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 2,
   },
   itemCardBottom: {
     padding: spacing.md,
-    backgroundColor: '#FFFFFF',
   },
   itemTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#111827',
-    marginBottom: 2,
   },
   itemCategory: {
     fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  stockText: {
+    fontSize: 11,
     color: '#9CA3AF',
-    marginBottom: spacing.md,
+    marginTop: 6,
   },
   itemFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: spacing.md,
   },
   itemPointsWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   itemPoints: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#16A34A',
     marginLeft: 4,
+    fontWeight: '800',
+    color: '#16A34A',
   },
   redeemButton: {
-    backgroundColor: '#14532D',
+    backgroundColor: '#111827',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   redeemButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   needMoreButton: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#E5E7EB',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   needMoreButtonText: {
-    color: '#9CA3AF',
+    color: '#6B7280',
     fontSize: 12,
-    fontWeight: 'bold',
-  }
+    fontWeight: '700',
+  },
 });

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import Header from '../components/Header';
-import IconActionButton from '../components/IconActionButton';
 import PageStatRow from '../components/PageStatRow';
 import PointsValue from '../components/PointsValue';
 import StatCard from '../components/StatCard';
@@ -248,7 +247,6 @@ export default function UsersPage() {
                           <option value="inactive">Inactive</option>
                           <option value="suspended">Suspended</option>
                         </select>
-                        <IconActionButton label="View user profile" variant="view" />
                       </div>
                     </td>
                   </tr>

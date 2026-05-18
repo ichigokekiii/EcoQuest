@@ -4,9 +4,11 @@ const {
   createAdminMission,
   createAdminReward,
   createAdminRoute,
+  deleteAdminRoute,
   createAdminTrashCategory,
   getAdminDashboard,
   listAdminMissions,
+  listAdminRedemptions,
   listAdminRewards,
   listAdminRouteSessions,
   listAdminTrashCategories,
@@ -45,6 +47,13 @@ router.patch(
 router.get('/routes', verifyFirebaseToken, authMiddleware, adminMiddleware, listAdminRoutes);
 router.post('/routes', verifyFirebaseToken, authMiddleware, adminMiddleware, createAdminRoute);
 router.patch('/routes/:routeId', verifyFirebaseToken, authMiddleware, adminMiddleware, updateAdminRoute);
+router.delete(
+  '/routes/:routeId',
+  verifyFirebaseToken,
+  authMiddleware,
+  adminMiddleware,
+  deleteAdminRoute
+);
 router.get('/missions', verifyFirebaseToken, authMiddleware, adminMiddleware, listAdminMissions);
 router.post('/missions', verifyFirebaseToken, authMiddleware, adminMiddleware, createAdminMission);
 router.patch(
@@ -55,6 +64,13 @@ router.patch(
   updateAdminMission
 );
 router.get('/rewards', verifyFirebaseToken, authMiddleware, adminMiddleware, listAdminRewards);
+router.get(
+  '/redemptions',
+  verifyFirebaseToken,
+  authMiddleware,
+  adminMiddleware,
+  listAdminRedemptions
+);
 router.post('/rewards', verifyFirebaseToken, authMiddleware, adminMiddleware, createAdminReward);
 router.patch(
   '/rewards/:rewardId',

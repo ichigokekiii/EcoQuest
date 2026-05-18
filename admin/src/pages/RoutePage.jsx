@@ -2,175 +2,20 @@ import { useEffect, useMemo, useState } from 'react';
 
 import Header from '../components/Header';
 import IconActionButton from '../components/IconActionButton';
+import Modal from '../components/Modal';
 import PageStatRow from '../components/PageStatRow';
+import RouteFormModal from '../components/RouteFormModal';
 import RouteMapPicker from '../components/RouteMapPicker';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import TableToolbar from '../components/TableToolbar';
 import api from '../services/api';
-
-const emptyRouteForm = {
-  name: '',
-  description: '',
-  difficulty: 'easy',
-  status: 'active',
-  startLocationName: '',
-  startLat: '14.6096',
-  startLng: '120.9904',
-  endLocationName: '',
-  endLat: '14.6115',
-  endLng: '120.993',
-  distanceKm: '1',
-  estimatedTimeMinutes: '20',
-  minimumTrashRequired: '3',
-  visualMaxGoal: '5',
-  basePoints: '100',
-  pointsPerTrash: '5',
-  bonusPointsPerExtraTrash: '3',
-  path: [],
-};
+import {
+  buildRouteFormFromRoute,
+  emptyRouteForm,
+} from '../utils/routeForm';
 
 const difficultyFilters = ['All', 'Easy', 'Medium', 'Hard'];
-
-function buildRouteFormFromRoute(route) {
-  return {
-    name: route.name || route.title || '',
-    description: route.description || '',
-    difficulty: route.difficulty || 'easy',
-    status: route.status || 'draft',
-    startLocationName: route.startLocation?.name || route.locationName || '',
-    startLat: String(route.startLocation?.lat ?? ''),
-    startLng: String(route.startLocation?.lng ?? ''),
-    endLocationName: route.endLocation?.name || '',
-    endLat: String(route.endLocation?.lat ?? ''),
-    endLng: String(route.endLocation?.lng ?? ''),
-    distanceKm: String(route.distanceKm ?? ''),
-    estimatedTimeMinutes: String(route.estimatedTimeMinutes ?? ''),
-    minimumTrashRequired: String(route.minimumTrashRequired ?? route.targetTrash ?? ''),
-    visualMaxGoal: String(route.visualMaxGoal ?? route.minimumTrashRequired ?? ''),
-    basePoints: String(route.basePoints ?? 0),
-    pointsPerTrash: String(route.pointsPerTrash ?? 5),
-    bonusPointsPerExtraTrash: String(route.bonusPointsPerExtraTrash ?? 2),
-    path: Array.isArray(route.path) ? route.path : route.coordinates || [],
-  };
-}
-
-function buildRoutePayload(form) {
-  return {
-    ...form,
-    path: Array.isArray(form.path) ? form.path : [],
-  };
-}
-
-function RouteForm({ editingRouteId, form, onCancel, onChange, onMapChange, onSubmit, saving }) {
-  return (
-    <section className="data-card page-form-card collapsible-form">
-      <div className="section-head">
-        <div>
-          <h2>{editingRouteId ? 'Edit Cleanup Route' : 'Create Cleanup Route'}</h2>
-          <p>Pin start and destination on the map like a navigation app, then save through Express.</p>
-        </div>
-        <button className="outline-action" onClick={onCancel} type="button">
-          Close
-        </button>
-      </div>
-
-      <RouteMapPicker onChange={onMapChange} value={form} />
-
-      <form className="form-grid route-form-grid" onSubmit={onSubmit}>
-        <label className="field">
-          <span>Name</span>
-          <input name="name" onChange={onChange} required value={form.name} />
-        </label>
-
-        <label className="field">
-          <span>Difficulty</span>
-          <select name="difficulty" onChange={onChange} value={form.difficulty}>
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-        </label>
-
-        <label className="field">
-          <span>Status</span>
-          <select name="status" onChange={onChange} value={form.status}>
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
-        </label>
-
-        <label className="field wide">
-          <span>Description</span>
-          <textarea name="description" onChange={onChange} value={form.description} />
-        </label>
-
-        <label className="field">
-          <span>Start Location</span>
-          <input name="startLocationName" onChange={onChange} value={form.startLocationName} />
-        </label>
-
-        <label className="field">
-          <span>End Location</span>
-          <input name="endLocationName" onChange={onChange} value={form.endLocationName} />
-        </label>
-
-        <label className="field">
-          <span>Distance (km)</span>
-          <input name="distanceKm" onChange={onChange} value={form.distanceKm} />
-        </label>
-
-        <label className="field">
-          <span>Estimated Time (min)</span>
-          <input name="estimatedTimeMinutes" onChange={onChange} value={form.estimatedTimeMinutes} />
-        </label>
-
-        <label className="field">
-          <span>Minimum Trash</span>
-          <input name="minimumTrashRequired" onChange={onChange} value={form.minimumTrashRequired} />
-        </label>
-
-        <label className="field">
-          <span>Visual Goal</span>
-          <input name="visualMaxGoal" onChange={onChange} value={form.visualMaxGoal} />
-        </label>
-
-        <label className="field">
-          <span>Base Points</span>
-          <input name="basePoints" onChange={onChange} value={form.basePoints} />
-        </label>
-
-        <label className="field">
-          <span>Points Per Trash</span>
-          <input name="pointsPerTrash" onChange={onChange} value={form.pointsPerTrash} />
-        </label>
-
-        <label className="field">
-          <span>Bonus Points</span>
-          <input
-            name="bonusPointsPerExtraTrash"
-            onChange={onChange}
-            value={form.bonusPointsPerExtraTrash}
-          />
-        </label>
-
-        <p className="field wide muted">
-          Path points saved: {Array.isArray(form.path) ? form.path.length : 0}
-          {form.status === 'active' && (!form.path || form.path.length === 0)
-            ? ' · Active routes should include a calculated path when possible.'
-            : ''}
-        </p>
-
-        <div className="form-actions">
-          <button className="filled-action" disabled={saving} type="submit">
-            {saving ? 'Saving...' : editingRouteId ? 'Update Route' : 'Create Route'}
-          </button>
-        </div>
-      </form>
-    </section>
-  );
-}
 
 function RouteViewModal({ route, onClose }) {
   if (!route) {
@@ -178,26 +23,70 @@ function RouteViewModal({ route, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section aria-modal="true" className="modal-card route-view-modal" role="dialog">
-        <div className="section-head">
-          <div>
-            <h2>{route.name || route.title}</h2>
-            <p>{route.description || 'No description provided.'}</p>
+    <Modal onClose={onClose}>
+      <div className="modal-backdrop" onClick={onClose} role="presentation">
+        <section
+          aria-modal="true"
+          className="modal-card route-view-modal"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <div className="section-head">
+            <div>
+              <h2>{route.name || route.title}</h2>
+              <p>{route.description || 'No description provided.'}</p>
+            </div>
+            <button className="outline-action" onClick={onClose} type="button">
+              Close
+            </button>
           </div>
-          <button className="outline-action" onClick={onClose} type="button">
-            Close
-          </button>
-        </div>
-        <RouteMapPicker value={buildRouteFormFromRoute(route)} />
-        <div className="route-view-meta">
-          <StatusBadge status={route.status || 'active'} />
-          <span>{route.distanceKm || 0} km</span>
-          <span>{route.estimatedTimeMinutes || 0} min</span>
-          <span>{String(route.difficulty || 'easy')}</span>
-        </div>
-      </section>
-    </div>
+          <RouteMapPicker readOnly layout="overlay" value={buildRouteFormFromRoute(route)} />
+          <div className="route-view-meta">
+            <StatusBadge status={route.status || 'active'} />
+            <span>{route.distanceKm || 0} km</span>
+            <span>{route.estimatedTimeMinutes || 0} min</span>
+            <span>{String(route.difficulty || 'easy')}</span>
+          </div>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+function RouteDeleteModal({ route, onClose, onConfirm, deleting }) {
+  if (!route) {
+    return null;
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div className="modal-backdrop" onClick={onClose} role="presentation">
+        <section
+          aria-modal="true"
+          className="modal-card route-delete-modal"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          <div className="section-head">
+            <div>
+              <h2>Delete Route</h2>
+              <p>
+                Permanently remove <strong>{route.name || route.title}</strong> from Firestore? This
+                cannot be undone.
+              </p>
+            </div>
+          </div>
+          <div className="route-form-modal-footer">
+            <button className="outline-action" disabled={deleting} onClick={onClose} type="button">
+              Cancel
+            </button>
+            <button className="filled-action danger-action" disabled={deleting} onClick={onConfirm} type="button">
+              {deleting ? 'Deleting...' : 'Delete Route'}
+            </button>
+          </div>
+        </section>
+      </div>
+    </Modal>
   );
 }
 
@@ -205,12 +94,11 @@ export default function RoutePage() {
   const [routes, setRoutes] = useState([]);
   const [tableSearch, setTableSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
-  const [routeForm, setRouteForm] = useState(emptyRouteForm);
-  const [editingRouteId, setEditingRouteId] = useState(null);
+  const [formModal, setFormModal] = useState(null);
   const [viewRoute, setViewRoute] = useState(null);
-  const [showForm, setShowForm] = useState(false);
+  const [deleteRoute, setDeleteRoute] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -249,97 +137,57 @@ export default function RoutePage() {
   const activeCount = routes.filter((route) => (route.status || 'active') === 'active').length;
   const draftCount = routes.filter((route) => route.status === 'draft').length;
 
-  function handleFormChange(event) {
-    const { name, value } = event.target;
-    setRouteForm((currentForm) => ({ ...currentForm, [name]: value }));
+  function handleRouteSaved(route) {
+    setRoutes((currentRoutes) => [
+      route,
+      ...currentRoutes.filter((item) => item.id !== route.id),
+    ]);
+    setSuccessMessage(
+      formModal?.mode === 'edit'
+        ? 'Route updated. Mobile route discovery will reflect the latest data.'
+        : 'Route created. Active routes can now appear in mobile discovery.'
+    );
+    setFormModal(null);
   }
 
-  function handleMapChange(nextValues) {
-    setRouteForm((currentForm) => ({
-      ...currentForm,
-      ...nextValues,
-      startLat: String(nextValues.startLat ?? currentForm.startLat),
-      startLng: String(nextValues.startLng ?? currentForm.startLng),
-      endLat: String(nextValues.endLat ?? currentForm.endLat),
-      endLng: String(nextValues.endLng ?? currentForm.endLng),
-      distanceKm: String(nextValues.distanceKm ?? currentForm.distanceKm),
-      estimatedTimeMinutes: String(nextValues.estimatedTimeMinutes ?? currentForm.estimatedTimeMinutes),
-    }));
-  }
-
-  async function handleSubmitRoute(event) {
-    event.preventDefault();
-    setSaving(true);
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    if (!routeForm.startLat || !routeForm.startLng || !routeForm.endLat || !routeForm.endLng) {
-      setErrorMessage('Start and destination coordinates are required.');
-      setSaving(false);
+  async function handleConfirmDelete() {
+    if (!deleteRoute) {
       return;
     }
 
+    setDeleting(true);
+    setErrorMessage('');
+
     try {
-      const payload = buildRoutePayload(routeForm);
-      const response = editingRouteId
-        ? await api.patch(`/admin/routes/${editingRouteId}`, payload)
-        : await api.post('/admin/routes', payload);
-
-      setSuccessMessage(
-        editingRouteId
-          ? 'Route updated. Mobile route discovery will reflect the latest data.'
-          : 'Route created. Active routes can now appear in mobile discovery.'
-      );
-      setEditingRouteId(null);
-      setRouteForm(emptyRouteForm);
-      setShowForm(false);
-
-      if (response.data.route) {
-        setRoutes((currentRoutes) => [
-          response.data.route,
-          ...currentRoutes.filter((route) => route.id !== response.data.route.id),
-        ]);
-      } else {
-        await loadRoutes();
-      }
+      await api.delete(`/admin/routes/${deleteRoute.id}`);
+      setRoutes((currentRoutes) => currentRoutes.filter((item) => item.id !== deleteRoute.id));
+      setSuccessMessage(`${deleteRoute.name || deleteRoute.title} deleted.`);
+      setDeleteRoute(null);
     } catch (error) {
-      setErrorMessage(error.response?.data?.message || 'Unable to save route.');
+      setErrorMessage(error.response?.data?.message || 'Unable to delete route.');
     } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleArchiveRoute(route) {
-    try {
-      const response = await api.patch(`/admin/routes/${route.id}`, { status: 'archived' });
-      setRoutes((currentRoutes) =>
-        currentRoutes.map((item) => (item.id === route.id ? response.data.route : item))
-      );
-      setSuccessMessage(`${route.name || route.title} archived.`);
-    } catch (error) {
-      setErrorMessage(error.response?.data?.message || 'Unable to archive route.');
+      setDeleting(false);
     }
   }
 
   function handleEditRoute(route) {
-    setEditingRouteId(route.id);
-    setRouteForm(buildRouteFormFromRoute(route));
-    setShowForm(true);
+    setFormModal({
+      mode: 'edit',
+      routeId: route.id,
+      initialForm: buildRouteFormFromRoute(route),
+    });
     setSuccessMessage('');
     setErrorMessage('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function handleOpenCreateForm() {
-    setEditingRouteId(null);
-    setRouteForm(emptyRouteForm);
-    setShowForm(true);
-  }
-
-  function handleCloseForm() {
-    setEditingRouteId(null);
-    setRouteForm(emptyRouteForm);
-    setShowForm(false);
+    setFormModal({
+      mode: 'create',
+      routeId: null,
+      initialForm: emptyRouteForm,
+    });
+    setSuccessMessage('');
+    setErrorMessage('');
   }
 
   return (
@@ -347,7 +195,7 @@ export default function RoutePage() {
       <Header
         actions={
           <button className="filled-action" onClick={handleOpenCreateForm} type="button">
-            + New Route
+            Create Route
           </button>
         }
         subtitle={`${activeCount} active cleanup routes`}
@@ -357,19 +205,26 @@ export default function RoutePage() {
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
       {successMessage ? <p className="success">{successMessage}</p> : null}
 
-      {showForm ? (
-        <RouteForm
-          editingRouteId={editingRouteId}
-          form={routeForm}
-          onCancel={handleCloseForm}
-          onChange={handleFormChange}
-          onMapChange={handleMapChange}
-          onSubmit={handleSubmitRoute}
-          saving={saving}
+      {formModal ? (
+        <RouteFormModal
+          initialForm={formModal.initialForm}
+          mode={formModal.mode}
+          onClose={() => setFormModal(null)}
+          onSaved={handleRouteSaved}
+          routeId={formModal.routeId}
         />
       ) : null}
 
       {viewRoute ? <RouteViewModal onClose={() => setViewRoute(null)} route={viewRoute} /> : null}
+
+      {deleteRoute ? (
+        <RouteDeleteModal
+          deleting={deleting}
+          onClose={() => setDeleteRoute(null)}
+          onConfirm={handleConfirmDelete}
+          route={deleteRoute}
+        />
+      ) : null}
 
       <PageStatRow>
         <StatCard
@@ -469,8 +324,8 @@ export default function RoutePage() {
                         />
                         <IconActionButton label="Edit route" onClick={() => handleEditRoute(route)} variant="edit" />
                         <IconActionButton
-                          label="Archive route"
-                          onClick={() => handleArchiveRoute(route)}
+                          label="Delete route"
+                          onClick={() => setDeleteRoute(route)}
                           variant="delete"
                         />
                       </div>

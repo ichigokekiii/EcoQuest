@@ -13,6 +13,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const devRoutes = require('./routes/devRoutes');
 const trashCategoryRoutes = require('./routes/trashCategoryRoutes');
 const trashSubmissionRoutes = require('./routes/trashSubmissionRoutes');
+const redemptionRoutes = require('./routes/redemptionRoutes');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/route-sessions', routeSessionRoutes);
 app.use('/api/missions', missionRoutes);
 app.use('/api/trash-categories', trashCategoryRoutes);
 app.use('/api/trash-submissions', trashSubmissionRoutes);
+app.use('/api/redemptions', redemptionRoutes);
 app.use('/api/store', storeRoutes);
 app.use('/api/profile', profileRoutes);
 

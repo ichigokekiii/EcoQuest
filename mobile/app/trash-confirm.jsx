@@ -321,15 +321,15 @@ export default function TrashConfirmScreen() {
             <View style={styles.modalIconContainer}>
               <Feather name="check" size={40} color="#16A34A" />
             </View>
-            <Text style={styles.modalTitle}>Trash Confirmed!</Text>
+            <Text style={styles.modalTitle}>Submission Received</Text>
             <View style={styles.pointsRow}>
-              <Feather name="zap" size={18} color="#16A34A" />
-              <Text style={styles.pointsText}>+{pointsEarned} pts tracked</Text>
+              <Feather name="clock" size={18} color="#D97706" />
+              <Text style={styles.pointsText}>{quantity} item{quantity === 1 ? '' : 's'} pending review</Text>
             </View>
             <Text style={styles.statusText}>
               {canFinishRoute
-                ? 'Minimum requirement reached.'
-                : 'Keep collecting to finish the route.'}
+                ? 'Your approved count already meets the route requirement. This new submission is still waiting for admin review.'
+                : `This trash photo is now waiting for admin review. Up to ${pointsEarned} points can be awarded after approval, and only approved items count toward route completion.`}
             </Text>
 
             <TouchableOpacity

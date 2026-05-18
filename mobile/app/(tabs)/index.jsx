@@ -1,58 +1,123 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, radius } from '../../src/constants/theme';
+import { useFocusEffect, useRouter } from 'expo-router';
+
 import Card from '../../src/components/Card';
+import { colors, spacing, radius } from '../../src/constants/theme';
+import { getDashboard } from '../../src/services/api';
+
+function getGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour < 12) {
+    return 'Good morning';
+  }
+
+  if (hour < 18) {
+    return 'Good afternoon';
+  }
+
+  return 'Good evening';
+}
+
+function getDisplayName(profile) {
+  if (!profile?.fullName) {
+    return 'Eco Hero';
+  }
+
+  return profile.fullName.split(' ')[0];
+}
 
 export default function HomeDashboardScreen() {
+  const router = useRouter();
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const loadDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorMessage('');
+      const response = await getDashboard();
+      setDashboard(response);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Unable to load your dashboard right now.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [loadDashboard])
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  const profile = dashboard?.profile || {};
+  const stats = dashboard?.stats || {};
+  const nearbyRoutes = dashboard?.nearbyRoutes || [];
+  const activeMission = dashboard?.activeMission || null;
+  const activeSession = dashboard?.activeSession || null;
+  const recentSessions = dashboard?.recentSessions || [];
+
   return (
     <View style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent} 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {/* Header Section (Dark Green) */}
         <View style={styles.headerSection}>
           <SafeAreaView edges={['top']} style={styles.safeArea}>
             <View style={styles.topBar}>
               <View>
-                <Text style={styles.greetingText}>Good morning</Text>
-                <Text style={styles.userName}>Alex Rivera</Text>
+                <Text style={styles.greetingText}>{getGreeting()}</Text>
+                <Text style={styles.userName}>{getDisplayName(profile)}</Text>
               </View>
-              <TouchableOpacity style={styles.bellButton}>
-                <Feather name="bell" size={20} color="#FFFFFF" />
-                <View style={styles.notificationDot} />
+              <TouchableOpacity style={styles.bellButton} onPress={loadDashboard}>
+                <Feather name="refresh-cw" size={18} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
-            {/* Total Points Card */}
             <View style={styles.pointsCard}>
               <View style={styles.pointsHeaderRow}>
                 <View>
                   <Text style={styles.pointsLabel}>Total Points</Text>
-                  <Text style={styles.pointsValue}>2,480</Text>
+                  <Text style={styles.pointsValue}>
+                    {Number(stats.points || 0).toLocaleString()}
+                  </Text>
                 </View>
                 <View style={styles.rankBadge}>
-                  <Text style={styles.rankText}>Rank #12</Text>
+                  <Text style={styles.rankText}>Lv. {profile.level || 1}</Text>
                 </View>
               </View>
 
               <View style={styles.statsRow}>
                 <View style={styles.statBox}>
                   <Feather name="trash-2" size={20} color="#FFFFFF" style={styles.statIcon} />
-                  <Text style={styles.statValue}>124</Text>
-                  <Text style={styles.statLabel}>Trash</Text>
+                  <Text style={styles.statValue}>
+                    {Number(stats.totalTrashCollected || 0).toLocaleString()}
+                  </Text>
+                  <Text style={styles.statLabel}>Approved</Text>
                 </View>
                 <View style={styles.statBox}>
                   <Feather name="map" size={20} color="#FFFFFF" style={styles.statIcon} />
-                  <Text style={styles.statValue}>8</Text>
+                  <Text style={styles.statValue}>{Number(stats.routesCompleted || 0)}</Text>
                   <Text style={styles.statLabel}>Routes</Text>
                 </View>
                 <View style={styles.statBox}>
                   <Feather name="target" size={20} color="#FFFFFF" style={styles.statIcon} />
-                  <Text style={styles.statValue}>5</Text>
+                  <Text style={styles.statValue}>{Number(stats.missionsCompleted || 0)}</Text>
                   <Text style={styles.statLabel}>Missions</Text>
                 </View>
               </View>
@@ -60,116 +125,157 @@ export default function HomeDashboardScreen() {
           </SafeAreaView>
         </View>
 
-        {/* Body Section (White) */}
         <View style={styles.bodySection}>
-          
-          {/* Active Mission */}
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
           <Card style={styles.activeMissionCard}>
             <View style={styles.missionHeader}>
               <View style={styles.missionIconWrapper}>
-                <Feather name="target" size={24} color="#F59E0B" />
+                <Feather
+                  name={activeSession ? 'map-pin' : 'target'}
+                  size={24}
+                  color={activeSession ? colors.primary : colors.warning}
+                />
               </View>
               <View style={styles.missionTextContent}>
-                <Text style={styles.missionTitle}>Active Mission</Text>
-                <Text style={styles.missionSubtitle}>Collect 5 plastic bottles</Text>
+                <Text style={styles.missionTitle}>
+                  {activeSession ? 'Active Route Session' : 'Active Mission'}
+                </Text>
+                <Text style={styles.missionSubtitle}>
+                  {activeSession
+                    ? `${activeSession.routeName || 'Cleanup Route'} · ${activeSession.approvedTrashCount || 0}/${activeSession.requiredTrashCount || 0} approved`
+                    : activeMission?.title || 'No active mission yet'}
+                </Text>
               </View>
               <Text style={styles.missionProgressText}>
-                <Text style={{color: '#16A34A'}}>3</Text> / 5
+                {activeSession
+                  ? `${activeSession.trashCollected || 0} submitted`
+                  : `${activeMission?.currentCount || 0} / ${activeMission?.requiredCount || 0}`}
               </Text>
             </View>
             <View style={styles.progressBarBackground}>
-              <View style={[styles.progressBarFill, { width: '60%' }]} />
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width: `${
+                      activeSession
+                        ? Math.min(
+                            ((activeSession.approvedTrashCount || 0) /
+                              Math.max(activeSession.requiredTrashCount || 1, 1)) *
+                              100,
+                            100
+                          )
+                        : Math.min(
+                            ((activeMission?.currentCount || 0) /
+                              Math.max(activeMission?.requiredCount || 1, 1)) *
+                              100,
+                            100
+                          )
+                    }%`,
+                  },
+                ]}
+              />
             </View>
+            <TouchableOpacity
+              style={styles.inlineActionButton}
+              onPress={() =>
+                activeSession
+                  ? router.push({
+                      pathname: '/active-route',
+                      params: {
+                        id: activeSession.routeId,
+                        sessionId: activeSession.id,
+                      },
+                    })
+                  : router.replace('/(tabs)/map')
+              }
+            >
+              <Text style={styles.inlineActionText}>
+                {activeSession ? 'Resume Route' : 'Find a Route'}
+              </Text>
+            </TouchableOpacity>
           </Card>
 
-          {/* Nearby Routes Header */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Nearby Routes</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.replace('/(tabs)/map')}>
               <Text style={styles.sectionAction}>See all</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Route Card 1 */}
-          <Card style={styles.routeCard}>
-            <View style={styles.routeHeaderRow}>
-              <Text style={styles.routeTitle}>Riverside Cleanup</Text>
-              <View style={styles.badgeEasy}>
-                <Text style={styles.badgeEasyText}>Easy</Text>
-              </View>
-            </View>
-            
-            <View style={styles.routeLocationRow}>
-              <Feather name="map-pin" size={14} color="#9CA3AF" />
-              <Text style={styles.routeLocationText}>Marina District</Text>
-            </View>
+          {nearbyRoutes.length === 0 ? (
+            <Card>
+              <Text style={styles.emptyStateText}>No active routes are available yet.</Text>
+            </Card>
+          ) : (
+            nearbyRoutes.slice(0, 3).map((route) => (
+              <Card key={route.id} style={styles.routeCard}>
+                <View style={styles.routeHeaderRow}>
+                  <Text style={styles.routeTitle}>{route.title}</Text>
+                  <View style={styles.badgeEasy}>
+                    <Text style={styles.badgeEasyText}>
+                      {route.difficulty ? route.difficulty[0].toUpperCase() + route.difficulty.slice(1) : 'Easy'}
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.routeStatsRow}>
-              <View style={styles.routeStat}>
-                <Feather name="map" size={14} color="#9CA3AF" />
-                <Text style={styles.routeStatText}>1.2 km</Text>
-              </View>
-              <View style={styles.routeStat}>
-                <Feather name="clock" size={14} color="#9CA3AF" />
-                <Text style={styles.routeStatText}>30 min</Text>
-              </View>
-              <View style={styles.routeStat}>
-                <Feather name="trash-2" size={14} color="#9CA3AF" />
-                <Text style={styles.routeStatText}>Min 10</Text>
-              </View>
-            </View>
+                <View style={styles.routeLocationRow}>
+                  <Feather name="map-pin" size={14} color="#9CA3AF" />
+                  <Text style={styles.routeLocationText}>{route.locationName}</Text>
+                </View>
 
-            <View style={styles.routeFooterRow}>
-              <View style={styles.pointsEarned}>
-                <Feather name="zap" size={16} color="#16A34A" />
-                <Text style={styles.pointsEarnedText}>+120 pts</Text>
-              </View>
-              <TouchableOpacity style={styles.viewDetailsButton}>
-                <Text style={styles.viewDetailsText}>View Details</Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
+                <View style={styles.routeStatsRow}>
+                  <View style={styles.routeStat}>
+                    <Feather name="map" size={14} color="#9CA3AF" />
+                    <Text style={styles.routeStatText}>{route.distance}</Text>
+                  </View>
+                  <View style={styles.routeStat}>
+                    <Feather name="clock" size={14} color="#9CA3AF" />
+                    <Text style={styles.routeStatText}>{route.duration}</Text>
+                  </View>
+                  <View style={styles.routeStat}>
+                    <Feather name="trash-2" size={14} color="#9CA3AF" />
+                    <Text style={styles.routeStatText}>Goal {route.targetTrash || 0}</Text>
+                  </View>
+                </View>
 
-          {/* Route Card 2 */}
-          <Card style={styles.routeCard}>
-            <View style={styles.routeHeaderRow}>
-              <Text style={styles.routeTitle}>Central Park Loop</Text>
-              <View style={styles.badgeMedium}>
-                <Text style={styles.badgeMediumText}>Medium</Text>
-              </View>
-            </View>
-            
-            <View style={styles.routeLocationRow}>
-              <Feather name="map-pin" size={14} color="#9CA3AF" />
-              <Text style={styles.routeLocationText}>SoMa</Text>
-            </View>
+                <View style={styles.routeFooterRow}>
+                  <View style={styles.pointsEarned}>
+                    <Feather name="zap" size={16} color="#16A34A" />
+                    <Text style={styles.pointsEarnedText}>+{route.points || 0} pts</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.viewDetailsButton}
+                    onPress={() => router.push({ pathname: '/route-details', params: { id: route.id } })}
+                  >
+                    <Text style={styles.viewDetailsText}>View Details</Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            ))
+          )}
 
-            <View style={styles.routeStatsRow}>
-              <View style={styles.routeStat}>
-                <Feather name="map" size={14} color="#9CA3AF" />
-                <Text style={styles.routeStatText}>2.5 km</Text>
+          {recentSessions.length > 0 ? (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Routes</Text>
               </View>
-              <View style={styles.routeStat}>
-                <Feather name="clock" size={14} color="#9CA3AF" />
-                <Text style={styles.routeStatText}>55 min</Text>
-              </View>
-              <View style={styles.routeStat}>
-                <Feather name="trash-2" size={14} color="#9CA3AF" />
-                <Text style={styles.routeStatText}>Min 18</Text>
-              </View>
-            </View>
-
-            <View style={styles.routeFooterRow}>
-              <View style={styles.pointsEarned}>
-                <Feather name="zap" size={16} color="#16A34A" />
-                <Text style={styles.pointsEarnedText}>+250 pts</Text>
-              </View>
-              <TouchableOpacity style={styles.viewDetailsButton}>
-                <Text style={styles.viewDetailsText}>View Details</Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
-
+              <Card style={styles.historyCard}>
+                {recentSessions.map((session) => (
+                  <View key={session.id} style={styles.historyRow}>
+                    <View>
+                      <Text style={styles.historyTitle}>{session.routeName || 'Cleanup Route'}</Text>
+                      <Text style={styles.historySubtitle}>
+                        {session.approvedTrashCount || 0} approved · +{session.totalPointsEarned || 0} pts
+                      </Text>
+                    </View>
+                    <Feather name="check-circle" size={18} color={colors.primary} />
+                  </View>
+                ))}
+              </Card>
+            </>
+          ) : null}
         </View>
       </ScrollView>
     </View>
@@ -179,6 +285,12 @@ export default function HomeDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
   },
   scrollContent: {
@@ -203,7 +315,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   greetingText: {
-    color: '#86EFAC', // Light green
+    color: '#86EFAC',
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 4,
@@ -220,18 +332,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 10,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
-    borderWidth: 1,
-    borderColor: '#14532D',
   },
   pointsCard: {
     backgroundColor: '#22C55E',
@@ -258,58 +358,57 @@ const styles = StyleSheet.create({
   rankBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 16,
   },
   rankText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    fontSize: 13,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   statBox: {
+    alignItems: 'center',
     flex: 1,
-    backgroundColor: 'rgba(20, 83, 45, 0.15)',
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    marginRight: spacing.sm,
   },
   statIcon: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   statValue: {
     color: '#FFFFFF',
     fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 2,
+    fontWeight: '800',
   },
   statLabel: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#DCFCE7',
     fontSize: 12,
-    fontWeight: '500',
+    marginTop: 2,
   },
   bodySection: {
     paddingHorizontal: spacing.lg,
-    marginTop: -spacing.md, // Pull active mission card up slightly if we wanted, but mock says it's below the green section
     paddingTop: spacing.lg,
+    gap: spacing.lg,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 14,
+    lineHeight: 20,
   },
   activeMissionCard: {
-    marginBottom: spacing.xl,
-    padding: spacing.lg,
+    gap: spacing.md,
   },
   missionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
   missionIconWrapper: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FEF3C7', // Light amber background
+    borderRadius: 22,
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
@@ -319,106 +418,110 @@ const styles = StyleSheet.create({
   },
   missionTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#111827',
-    marginBottom: 2,
   },
   missionSubtitle: {
-    fontSize: 13,
     color: '#6B7280',
+    fontSize: 13,
+    marginTop: 2,
   },
   missionProgressText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
+    color: '#16A34A',
+    fontWeight: '800',
+    fontSize: 13,
   },
   progressBarBackground: {
     height: 8,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 4,
-    width: '100%',
+    backgroundColor: '#E5E7EB',
+    borderRadius: 999,
+    overflow: 'hidden',
   },
   progressBarFill: {
-    height: 8,
+    height: '100%',
     backgroundColor: '#16A34A',
-    borderRadius: 4,
+    borderRadius: 999,
+  },
+  inlineActionButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#111827',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  inlineActionText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: '#111827',
   },
   sectionAction: {
-    fontSize: 14,
-    fontWeight: '600',
     color: '#16A34A',
+    fontWeight: '700',
+  },
+  emptyStateText: {
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
   },
   routeCard: {
-    marginBottom: spacing.md,
-    padding: spacing.lg,
+    gap: spacing.md,
   },
   routeHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
   },
   routeTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#111827',
+    flex: 1,
+    marginRight: spacing.sm,
   },
   badgeEasy: {
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   badgeEasyText: {
-    color: '#16A34A',
+    color: '#166534',
     fontSize: 12,
-    fontWeight: 'bold',
-  },
-  badgeMedium: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeMediumText: {
-    color: '#D97706',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   routeLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
   routeLocationText: {
-    color: '#9CA3AF',
-    fontSize: 14,
+    color: '#6B7280',
     marginLeft: 6,
+    fontSize: 13,
   },
   routeStatsRow: {
     flexDirection: 'row',
-    marginBottom: spacing.lg,
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
   routeStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing.lg,
   },
   routeStatText: {
-    color: '#9CA3AF',
-    fontSize: 13,
+    color: '#374151',
     marginLeft: 6,
+    fontSize: 13,
+    fontWeight: '600',
   },
   routeFooterRow: {
     flexDirection: 'row',
@@ -431,19 +534,36 @@ const styles = StyleSheet.create({
   },
   pointsEarnedText: {
     color: '#16A34A',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 4,
+    fontWeight: '800',
+    marginLeft: 6,
   },
   viewDetailsButton: {
-    backgroundColor: '#111827', // Dark navy
-    paddingHorizontal: 16,
+    backgroundColor: '#111827',
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 999,
   },
   viewDetailsText: {
     color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  historyCard: {
+    gap: spacing.md,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  historyTitle: {
     fontSize: 14,
-    fontWeight: 'bold',
-  }
+    fontWeight: '700',
+    color: '#111827',
+  },
+  historySubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
 });

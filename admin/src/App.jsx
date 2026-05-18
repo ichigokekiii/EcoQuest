@@ -18,13 +18,16 @@ import { auth } from './services/firebase';
 
 function LoadingScreen() {
   return (
-    <main className="auth-shell auth-shell-loading">
+    <main className="auth-shell">
       <AuthBrandPanel />
       <section className="auth-form-panel">
-        <div className="auth-card auth-loading">
-          <div className="auth-loading-spinner" aria-hidden="true" />
-          <h1>Checking your session</h1>
-          <p className="muted">Connecting to Firebase authentication...</p>
+        <div className="auth-card px-6 py-10 text-center">
+          <div
+            aria-hidden="true"
+            className="mx-auto h-[42px] w-[42px] animate-auth-spin rounded-full border-[3px] border-mint/20 border-t-mint"
+          />
+          <h1 className="mb-2 mt-4 text-xl font-bold text-gray-900">Checking your session</h1>
+          <p className="text-sm text-gray-500">Connecting to Firebase authentication...</p>
         </div>
       </section>
     </main>
@@ -64,9 +67,7 @@ export default function App() {
         />
         <Route
           path="/register"
-          element={
-            currentUser ? <Navigate replace to="/" /> : <RegisterPage />
-          }
+          element={currentUser ? <Navigate replace to="/" /> : <RegisterPage />}
         />
         <Route
           path="/"

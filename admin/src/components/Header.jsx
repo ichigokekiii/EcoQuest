@@ -1,3 +1,5 @@
+import { Search, Bell } from "lucide-react";
+
 export default function Header({
   title,
   subtitle,
@@ -6,40 +8,43 @@ export default function Header({
   onSearchChange,
   actions,
 }) {
-  const searchInput = (
-    <label className="search-shell">
-      <svg viewBox="0 0 24 24" className="search-icon" aria-hidden="true">
-        <path d="M10.5 4a6.5 6.5 0 1 0 4 11.6l4.4 4.5 1.4-1.4-4.4-4.5A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z" />
-      </svg>
+  const searchInput = onSearchChange ? (
+    <label className="relative flex min-w-[240px] items-center">
+      <Search className="pointer-events-none absolute left-3 h-4 w-4 text-gray-400" />
       <input
+        className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm outline-none transition-colors focus:border-[#22c55e] focus:bg-white"
         onChange={onSearchChange}
         placeholder={searchPlaceholder || 'Search anything...'}
         type="text"
         value={searchValue}
       />
     </label>
-  );
+  ) : null;
 
   return (
-    <header className="topbar">
-      <div className="page-header-row">
-        <div className="page-heading">
-          <h1>{title}</h1>
-          {subtitle ? <p>{subtitle}</p> : null}
+    <header className="mb-8 flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-[1.75rem] font-bold tracking-tight text-gray-900">{title}</h1>
+          {subtitle ? <p className="mt-1 text-sm text-gray-500 font-medium">{subtitle}</p> : null}
         </div>
 
-        <div className="topbar-utilities">
-          {actions ? <div className="header-actions">{actions}</div> : null}
+        <div className="flex flex-wrap items-center justify-end gap-4">
+          {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
           {searchInput}
-          <div className="topbar-actions">
-            <button type="button" className="icon-button" aria-label="Notifications">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 22a2.5 2.5 0 0 0 2.5-2h-5a2.5 2.5 0 0 0 2.5 2ZM18 16v-5a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2Zm-2 1H8v-6a4 4 0 1 1 8 0v6Z" />
-              </svg>
-              <span className="icon-button-badge">5</span>
+          <div className="flex items-center gap-3 pl-2 border-l border-gray-200">
+            <button
+              type="button"
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
+              aria-label="Notifications"
+            >
+              <Bell className="h-5 w-5" />
+              <span className="absolute right-1 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                5
+              </span>
             </button>
-            <div className="profile-chip">
-              <span className="profile-avatar">A</span>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dcfce7] text-sm font-bold text-[#15803d] shadow-sm ring-2 ring-white">
+              A
             </div>
           </div>
         </div>

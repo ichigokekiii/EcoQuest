@@ -35,3 +35,29 @@ test('admin routes route enforces auth and admin middleware', () => {
     'listAdminRoutes',
   ]);
 });
+
+function getRouteHandlers(path, method) {
+  const layer = router.stack.find(
+    (stackLayer) => stackLayer.route?.path === path && stackLayer.route.methods[method]
+  );
+
+  return layer?.route?.stack?.map((handlerLayer) => handlerLayer.name) || null;
+}
+
+test('admin route delete enforces auth and admin middleware', () => {
+  assert.deepEqual(getRouteHandlers('/routes/:routeId', 'delete'), [
+    'verifyFirebaseToken',
+    'authMiddleware',
+    'adminMiddleware',
+    'deleteAdminRoute',
+  ]);
+});
+
+test('admin redemptions route enforces auth and admin middleware', () => {
+  assert.deepEqual(getRouteStack('/redemptions'), [
+    'verifyFirebaseToken',
+    'authMiddleware',
+    'adminMiddleware',
+    'listAdminRedemptions',
+  ]);
+});

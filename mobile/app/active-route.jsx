@@ -152,9 +152,12 @@ export default function ActiveRouteScreen() {
   }
 
   const trashTarget = route.targetTrash || route.minimumTrashRequired || session.requiredTrashCount || 0;
-  const progressPercent = trashTarget > 0 ? Math.min((session.approvedTrashCount / trashTarget) * 100, 100) : 0;
-  const canFinish = session.approvedTrashCount >= session.requiredTrashCount;
-  const draftPoints = session.approvedTrashCount * 5;
+  const approvedTrashCount = Number(session.approvedTrashCount || 0);
+  const submittedTrashCount = Number(session.trashCollected || 0);
+  const pendingReviewCount = Math.max(submittedTrashCount - approvedTrashCount, 0);
+  const progressPercent = trashTarget > 0 ? Math.min((approvedTrashCount / trashTarget) * 100, 100) : 0;
+  const canFinish = approvedTrashCount >= session.requiredTrashCount;
+  const approvedPointsPreview = approvedTrashCount * 5;
   const missionProgress = session.missionProgress || [];
 
   return (
@@ -264,14 +267,14 @@ export default function ActiveRouteScreen() {
           <View style={styles.sheetContentWrapper}>
             <View style={styles.statsRow}>
               <View>
-                <Text style={styles.sheetSubtitle}>TRASH COLLECTED</Text>
+                <Text style={styles.sheetSubtitle}>APPROVED TRASH</Text>
                 <View style={styles.countRow}>
-                  <Text style={styles.largeCount}>{session.approvedTrashCount}</Text>
+                  <Text style={styles.largeCount}>{approvedTrashCount}</Text>
                   <Text style={styles.subCount}>/ {trashTarget}</Text>
                 </View>
               </View>
               <View style={styles.pointsTextContainer}>
-                <Text style={styles.pointsNumberText}>+{draftPoints} </Text>
+                <Text style={styles.pointsNumberText}>+{approvedPointsPreview} </Text>
                 <Text style={styles.pointsUnitText}>pts</Text>
               </View>
             </View>
@@ -281,16 +284,29 @@ export default function ActiveRouteScreen() {
                 <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
               </View>
               <View style={styles.progressLabels}>
-                <Text style={styles.progressLabelText}>{session.approvedTrashCount}</Text>
+                <Text style={styles.progressLabelText}>Approved: {approvedTrashCount}</Text>
                 <Text style={styles.progressLabelActive}>Goal: {trashTarget}</Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewSummaryRow}>
+              <View style={styles.reviewSummaryCard}>
+                <Text style={styles.reviewSummaryLabel}>Submitted</Text>
+                <Text style={styles.reviewSummaryValue}>{submittedTrashCount}</Text>
+              </View>
+              <View style={styles.reviewSummaryCard}>
+                <Text style={styles.reviewSummaryLabel}>Awaiting review</Text>
+                <Text style={styles.reviewSummaryValue}>{pendingReviewCount}</Text>
               </View>
             </View>
 
             {/* Below items are hidden when collapsed */}
             <Text style={styles.unlockGrayText}>
               {canFinish
-                ? 'Minimum requirement reached. You can finish now or keep collecting for bonus points.'
-                : `Collect ${Math.max(session.requiredTrashCount - session.approvedTrashCount, 0)} more trash to complete the route.`}
+                ? 'Minimum approved requirement reached. You can finish now or keep collecting for bonus points.'
+                : pendingReviewCount > 0
+                  ? `${pendingReviewCount} submitted item${pendingReviewCount === 1 ? '' : 's'} still need review. You need ${Math.max(session.requiredTrashCount - approvedTrashCount, 0)} more approved item${Math.max(session.requiredTrashCount - approvedTrashCount, 0) === 1 ? '' : 's'} to finish.`
+                  : `Collect ${Math.max(session.requiredTrashCount - approvedTrashCount, 0)} more approved item${Math.max(session.requiredTrashCount - approvedTrashCount, 0) === 1 ? '' : 's'} to complete the route.`}
             </Text>
 
             {missionProgress.length > 0 && (
@@ -589,6 +605,30 @@ const styles = StyleSheet.create({
     color: '#D97706',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  reviewSummaryRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  reviewSummaryCard: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  reviewSummaryLabel: {
+    color: '#6B7280',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  reviewSummaryValue: {
+    color: '#111827',
+    fontSize: 22,
+    fontWeight: '900',
   },
   unlockGrayText: {
     color: '#9CA3AF',

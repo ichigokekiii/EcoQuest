@@ -66,6 +66,7 @@ export default function DashboardPage({ adminProfile }) {
   const [dashboard, setDashboard] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [redemptions, setRedemptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -77,10 +78,11 @@ export default function DashboardPage({ adminProfile }) {
         setLoading(true);
         setErrorMessage('');
 
-        const [dashboardResponse, sessionsResponse, submissionsResponse] = await Promise.all([
+        const [dashboardResponse, sessionsResponse, submissionsResponse, redemptionsResponse] = await Promise.all([
           api.get('/admin/dashboard'),
           api.get('/admin/route-sessions?limit=50'),
           api.get('/admin/trash-submissions?limit=50'),
+          api.get('/admin/redemptions?limit=20'),
         ]);
 
         if (!isMounted) {
@@ -90,6 +92,7 @@ export default function DashboardPage({ adminProfile }) {
         setDashboard(dashboardResponse.data);
         setSessions(sessionsResponse.data.sessions || []);
         setSubmissions(submissionsResponse.data.submissions || []);
+        setRedemptions(redemptionsResponse.data.redemptions || []);
       } catch (error) {
         if (isMounted) {
           setErrorMessage(
@@ -123,6 +126,7 @@ export default function DashboardPage({ adminProfile }) {
   const activityRows = useMemo(() => {
     const sessionRows = sessions.map((session) => ({
       id: session.id,
+      sortValue: session.updatedAt || session.createdAt || '',
       user: session.userName || session.userId || 'EcoQuest User',
       handle: `@${String(session.userId || 'user').slice(0, 8)}`,
       route: session.routeName || session.routeId || 'Cleanup Route',
@@ -134,6 +138,7 @@ export default function DashboardPage({ adminProfile }) {
 
     const submissionRows = submissions.map((item) => ({
       id: item.id,
+      sortValue: item.createdAt || item.updatedAt || '',
       user: item.userName || item.userId || 'EcoQuest User',
       handle: `@${String(item.userId || 'user').slice(0, 8)}`,
       route: item.routeName || item.routeId || 'Cleanup Route',
@@ -143,10 +148,22 @@ export default function DashboardPage({ adminProfile }) {
       time: formatTimestamp(item.createdAt),
     }));
 
-    return [...sessionRows, ...submissionRows]
-      .sort((first, second) => second.time.localeCompare(first.time))
+    const redemptionRows = redemptions.map((item) => ({
+      id: item.id,
+      sortValue: item.redeemedAt || item.createdAt || item.updatedAt || '',
+      user: item.userName || item.userId || 'EcoQuest User',
+      handle: `@${String(item.userId || 'user').slice(0, 8)}`,
+      route: item.rewardName || item.rewardId || 'Reward redemption',
+      trash: '—',
+      points: item.pointsCost ? -Number(item.pointsCost) : 0,
+      status: item.status || 'pending',
+      time: formatTimestamp(item.redeemedAt || item.createdAt),
+    }));
+
+    return [...sessionRows, ...submissionRows, ...redemptionRows]
+      .sort((first, second) => new Date(second.sortValue || 0) - new Date(first.sortValue || 0))
       .slice(0, 8);
-  }, [sessions, submissions]);
+  }, [redemptions, sessions, submissions]);
 
   const cardValues = {
     users: summary.users ?? 0,
@@ -173,7 +190,7 @@ export default function DashboardPage({ adminProfile }) {
       key: 'trashSubmissions',
       label: 'Trash Submissions',
       tone: 'yellow',
-      footnote: `${weeklyTotal} this week`,
+      footnote: `${weeklyTotal} this week · ${summary.redemptions ?? redemptions.length} redemptions`,
     },
     {
       key: 'pendingSubmissions',
@@ -293,7 +310,36 @@ export default function DashboardPage({ adminProfile }) {
               <strong>{Math.max(1, Math.round(weeklyTotal / 7))}</strong>
               <span>Avg/day</span>
             </div>
+            <div>
+              <strong>{summary.pointsRedeemed ?? 0}</strong>
+              <span>Pts redeemed</span>
+            </div>
           </div>
+
+          <div className="section-head">
+            <div>
+              <h2>Recent Redemptions</h2>
+              <p>Latest reward claims from Firebase.</p>
+            </div>
+          </div>
+          {redemptions.length === 0 ? (
+            <p className="empty-state">No reward redemptions yet.</p>
+          ) : (
+            <div className="stack-list">
+              {redemptions.slice(0, 4).map((item) => (
+                <div className="stack-list-row" key={item.id}>
+                  <div>
+                    <strong>{item.rewardName || 'Reward redemption'}</strong>
+                    <p className="muted">{item.userName || item.userId || 'EcoQuest User'}</p>
+                  </div>
+                  <div className="stack-list-meta">
+                    <PointsValue value={-Number(item.pointsCost || 0)} />
+                    <StatusBadge status={item.status || 'pending'} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </aside>
       </section>
     </section>

@@ -45,6 +45,8 @@ export default function LoginPage() {
     } catch (error) {
       if (error.code === 'auth/popup-closed-by-user') {
         setErrorMessage('Google sign-in was cancelled.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setErrorMessage('Google sign-in is not enabled in Firebase Authentication console.');
       } else {
         setErrorMessage(error.response?.data?.message || error.message || 'Unable to sign in with Google.');
       }
@@ -59,16 +61,23 @@ export default function LoginPage() {
 
       <section className="auth-form-panel">
         <div className="auth-card">
-          <div className="auth-card-intro">
-            <img alt="" aria-hidden="true" className="auth-card-mark" src="/eco-logo-mint.svg" />
+          <div className="mb-6 flex items-center gap-3.5">
+            <img
+              alt=""
+              aria-hidden="true"
+              className="h-12 w-12 shrink-0 rounded-[14px] shadow-sm"
+              src="/eco-logo-mint.svg"
+            />
             <div>
-              <p className="auth-card-welcome">Welcome back</p>
-              <h1>Sign in to Admin</h1>
+              <p className="mb-0.5 text-sm font-semibold text-gray-500">Welcome back</p>
+              <h1 className="m-0 text-[1.65rem] font-extrabold leading-tight tracking-tight text-gray-900">
+                Sign in to Admin
+              </h1>
             </div>
           </div>
 
-          <form className="stack auth-form" onSubmit={handleSubmit}>
-            <label className="field">
+          <form className="grid gap-4" onSubmit={handleSubmit}>
+            <label className="auth-field">
               <span>Email</span>
               <input
                 autoComplete="email"
@@ -80,7 +89,7 @@ export default function LoginPage() {
               />
             </label>
 
-            <label className="field">
+            <label className="auth-field">
               <span>Password</span>
               <input
                 autoComplete="current-password"
@@ -92,25 +101,30 @@ export default function LoginPage() {
               />
             </label>
 
-            {errorMessage ? <p className="error">{errorMessage}</p> : null}
+            {errorMessage ? <p className="text-sm text-red-500">{errorMessage}</p> : null}
 
             <button className="auth-submit" disabled={submitting} type="submit">
               {submitting ? 'Signing in...' : 'Log In'}
             </button>
           </form>
 
-          <div className="auth-divider">
+          <div className="my-4 flex items-center gap-3 text-xs text-gray-400">
+            <span className="h-px flex-1 bg-gray-200" />
             <span>or</span>
+            <span className="h-px flex-1 bg-gray-200" />
           </div>
 
           <GoogleSignInButton disabled={submitting} onClick={handleGoogleSignIn} />
 
-          <p className="auth-switch">
-            Need an account? <Link to="/register">Create one</Link>
+          <p className="mt-4 text-center text-sm text-gray-500">
+            Need an account?{' '}
+            <Link className="font-bold text-mint" to="/register">
+              Create one
+            </Link>
           </p>
         </div>
 
-        <footer className="auth-footer">
+        <footer className="absolute bottom-5 left-0 right-0 flex justify-between px-8 text-xs text-gray-400">
           <span>© 2026 Eco Quest</span>
           <span>Admin Console</span>
         </footer>

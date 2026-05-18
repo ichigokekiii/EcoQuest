@@ -102,6 +102,11 @@ export async function getStoreData() {
   return response.data;
 }
 
+export async function redeemReward(rewardId) {
+  const response = await api.post(`/redemptions/${rewardId}`);
+  return response.data;
+}
+
 export async function getProfileData() {
   const response = await api.get('/profile');
   return response.data;

@@ -1,32 +1,132 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { colors, spacing, radius } from '../../src/constants/theme';
+import { useFocusEffect } from 'expo-router';
+
 import Card from '../../src/components/Card';
+import { colors, spacing, radius } from '../../src/constants/theme';
+import { getProfileData } from '../../src/services/api';
 
-const statsData = [
-  { id: '1', title: 'Total Points', value: '2,480', icon: 'zap' },
-  { id: '2', title: 'Trash Collected', value: '124', icon: 'trash-2' },
-  { id: '3', title: 'Routes Done', value: '8', icon: 'map' },
-  { id: '4', title: 'Missions Done', value: '5', icon: 'target' },
-];
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
 
-const achievementsData = [
-  { id: '1', title: 'First Route', icon: 'star' },
-  { id: '2', title: '100 Trash', icon: 'trash-2' },
-  { id: '3', title: '5 Routes', icon: 'map' },
-  { id: '4', title: 'Top 20', icon: 'award' },
-  { id: '5', title: 'Water Hero', icon: 'droplet' },
-  { id: '6', title: '7-Day Streak', icon: 'award' },
-];
+function formatTimestamp(value) {
+  if (!value) {
+    return 'Recently';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Recently';
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function getInitials(value) {
+  return (value || 'Eco Quest')
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function getHandle(profile) {
+  const username = profile?.username || profile?.email?.split('@')[0] || profile?.id?.slice(0, 8) || 'eco-user';
+  return `@${username}`;
+}
+
+function buildActivityItems(profileData) {
+  const sessionItems = (profileData?.recentSessions || []).map((session) => ({
+    id: `session-${session.id}`,
+    title: session.routeName || 'Completed route',
+    subtitle: `${Number(session.approvedTrashCount || 0)} approved · ${Number(session.trashCollected || 0)} submitted`,
+    meta: formatTimestamp(session.completedAt || session.updatedAt || session.createdAt),
+    sortValue: session.completedAt || session.updatedAt || session.createdAt || '',
+    icon: 'map',
+  }));
+
+  const submissionItems = (profileData?.recentSubmissions || []).map((submission) => ({
+    id: `submission-${submission.id}`,
+    title: submission.finalCategoryName || submission.trashCategoryName || 'Trash submission',
+    subtitle: `${Number(submission.quantity || 1)} item${Number(submission.quantity || 1) === 1 ? '' : 's'} · ${submission.status || 'pending'}`,
+    meta: formatTimestamp(submission.createdAt || submission.updatedAt),
+    sortValue: submission.createdAt || submission.updatedAt || '',
+    icon: 'camera',
+  }));
+
+  return [...sessionItems, ...submissionItems]
+    .sort((first, second) => new Date(second.sortValue || 0) - new Date(first.sortValue || 0))
+    .slice(0, 8);
+}
 
 export default function ProfileScreen() {
-  const [activeTab, setActiveTab] = useState('Activity'); // 'Activity', 'Competitions', 'Achievements'
+  const [activeTab, setActiveTab] = useState('Activity');
+  const [profileData, setProfileData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorMessage('');
+      const response = await getProfileData();
+      setProfileData(response);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || 'Unable to load your profile right now.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
+
+  const profile = profileData?.profile || {};
+  const stats = profileData?.stats || {};
+  const achievements = profileData?.achievementsSummary || [];
+  const recentRedemptions = profileData?.recentRedemptions || [];
+  const recentSubmissions = profileData?.recentSubmissions || [];
+  const activityItems = useMemo(() => buildActivityItems(profileData), [profileData]);
+
+  const statsData = [
+    { id: 'points', title: 'Total Points', value: formatNumber(stats.points), icon: 'zap' },
+    { id: 'trash', title: 'Trash Collected', value: formatNumber(stats.totalTrashCollected), icon: 'trash-2' },
+    { id: 'routes', title: 'Routes Done', value: formatNumber(stats.routesCompleted), icon: 'map' },
+    { id: 'missions', title: 'Missions Done', value: formatNumber(stats.missionsCompleted), icon: 'target' },
+  ];
+
+  const visibleItems =
+    activeTab === 'Rewards'
+      ? recentRedemptions.map((redemption) => ({
+          id: redemption.id,
+          title: redemption.rewardName || 'Reward redemption',
+          subtitle: `${formatNumber(redemption.pointsCost)} pts · ${redemption.status || 'pending'}`,
+          meta: formatTimestamp(redemption.redeemedAt || redemption.createdAt || redemption.updatedAt),
+          icon: 'gift',
+        }))
+      : activeTab === 'Submissions'
+        ? recentSubmissions.map((submission) => ({
+            id: submission.id,
+            title: submission.finalCategoryName || submission.trashCategoryName || 'Trash submission',
+            subtitle: `${Number(submission.quantity || 1)} item${Number(submission.quantity || 1) === 1 ? '' : 's'} · ${submission.status || 'pending'}`,
+            meta: formatTimestamp(submission.createdAt || submission.updatedAt),
+            icon: 'camera',
+          }))
+        : activityItems;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.headerIconCircle}>
@@ -34,95 +134,127 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.headerTitle}>Profile</Text>
         </View>
-        <TouchableOpacity style={styles.headerRight}>
-          <Feather name="settings" size={20} color="#6B7280" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <Text style={styles.levelText}>Lv.{profile.level || 1}</Text>
+        </View>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabSelector}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tabButton, activeTab === 'Activity' && styles.tabButtonActive]}
           onPress={() => setActiveTab('Activity')}
         >
           <Text style={[styles.tabText, activeTab === 'Activity' && styles.tabTextActive]}>Activity</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'Competitions' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('Competitions')}
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'Submissions' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('Submissions')}
         >
-          <Text style={[styles.tabText, activeTab === 'Competitions' && styles.tabTextActive]}>Competitions</Text>
+          <Text style={[styles.tabText, activeTab === 'Submissions' && styles.tabTextActive]}>Submissions</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tabButton, activeTab === 'Achievements' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('Achievements')}
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'Rewards' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('Rewards')}
         >
-          <Text style={[styles.tabText, activeTab === 'Achievements' && styles.tabTextActive]}>Achievements</Text>
+          <Text style={[styles.tabText, activeTab === 'Rewards' && styles.tabTextActive]}>Rewards</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Scrollable Content */}
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         style={styles.mainScrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        
-        {/* User Info Card */}
-        <Card style={styles.userInfoCard}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatarCircle}>
-              <Feather name="user" size={32} color="#FFFFFF" />
-            </View>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelBadgeText}>Lv.7</Text>
-            </View>
-          </View>
-          
-          <View style={styles.userDetails}>
-            <Text style={styles.userName}>Alex Rivera</Text>
-            <Text style={styles.userHandle}>@alexr_eco</Text>
-            <View style={styles.userTagsRow}>
-              <View style={styles.guardianPill}>
-                <Text style={styles.guardianPillText}>Eco Guardian</Text>
-              </View>
-              <Text style={styles.rankText}>Rank #12</Text>
-            </View>
-          </View>
-        </Card>
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-        {/* 2x2 Stats Grid */}
-        <View style={styles.statsGrid}>
-          {statsData.map((stat) => (
-            <Card key={stat.id} style={styles.statCard}>
-              <Feather name={stat.icon} size={20} color="#9CA3AF" style={styles.statIcon} />
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statTitle}>{stat.title}</Text>
-            </Card>
-          ))}
-        </View>
-
-        {/* Achievements Card */}
-        <Card style={styles.achievementsCard}>
-          <View style={styles.achievementsHeader}>
-            <Text style={styles.achievementsTitle}>Achievements</Text>
-            <TouchableOpacity>
-              <Text style={styles.viewAllText}>View all</Text>
-            </TouchableOpacity>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color="#16A34A" />
           </View>
-          
-          <View style={styles.achievementsGrid}>
-            {achievementsData.map((item) => (
-              <View key={item.id} style={styles.achievementItem}>
-                <View style={styles.achievementCircle}>
-                  <Feather name={item.icon} size={20} color="#374151" />
+        ) : (
+          <>
+            <Card style={styles.userInfoCard}>
+              <View style={styles.avatarContainer}>
+                <View style={styles.avatarCircle}>
+                  <Text style={styles.avatarInitials}>{getInitials(profile.fullName || profile.username || profile.email)}</Text>
                 </View>
-                <Text style={styles.achievementText}>{item.title}</Text>
+                <View style={styles.levelBadge}>
+                  <Text style={styles.levelBadgeText}>Lv.{profile.level || 1}</Text>
+                </View>
               </View>
-            ))}
-          </View>
-        </Card>
 
+              <View style={styles.userDetails}>
+                <Text style={styles.userName}>{profile.fullName || 'Eco Quest User'}</Text>
+                <Text style={styles.userHandle}>{getHandle(profile)}</Text>
+                <View style={styles.userTagsRow}>
+                  <View style={styles.guardianPill}>
+                    <Text style={styles.guardianPillText}>{profile.status || 'active'}</Text>
+                  </View>
+                  <Text style={styles.rankText}>{profile.role || 'user'}</Text>
+                </View>
+              </View>
+            </Card>
+
+            <View style={styles.statsGrid}>
+              {statsData.map((stat) => (
+                <Card key={stat.id} style={styles.statCard}>
+                  <Feather name={stat.icon} size={20} color="#9CA3AF" style={styles.statIcon} />
+                  <Text style={styles.statValue}>{stat.value}</Text>
+                  <Text style={styles.statTitle}>{stat.title}</Text>
+                </Card>
+              ))}
+            </View>
+
+            <Card style={styles.achievementsCard}>
+              <View style={styles.achievementsHeader}>
+                <Text style={styles.achievementsTitle}>Verified Progress</Text>
+                <Text style={styles.viewAllText}>{achievements.length} live stats</Text>
+              </View>
+
+              <View style={styles.achievementsGrid}>
+                {achievements.map((item) => (
+                  <View key={item.id} style={styles.achievementItem}>
+                    <View style={styles.achievementCircle}>
+                      <Feather name={item.icon} size={20} color="#374151" />
+                    </View>
+                    <Text style={styles.achievementValue}>{formatNumber(item.value)}</Text>
+                    <Text style={styles.achievementText}>{item.title}</Text>
+                  </View>
+                ))}
+              </View>
+            </Card>
+
+            <Card style={styles.activityCard}>
+              <View style={styles.achievementsHeader}>
+                <Text style={styles.achievementsTitle}>
+                  {activeTab === 'Rewards'
+                    ? 'Recent Redemptions'
+                    : activeTab === 'Submissions'
+                      ? 'Recent Submissions'
+                      : 'Recent Activity'}
+                </Text>
+                <Text style={styles.viewAllText}>{visibleItems.length} items</Text>
+              </View>
+
+              {visibleItems.length === 0 ? (
+                <Text style={styles.emptyStateText}>No live data for this section yet.</Text>
+              ) : (
+                visibleItems.map((item) => (
+                  <View key={item.id} style={styles.activityRow}>
+                    <View style={styles.activityIconCircle}>
+                      <Feather name={item.icon} size={18} color="#16A34A" />
+                    </View>
+                    <View style={styles.activityTextGroup}>
+                      <Text style={styles.activityTitle}>{item.title}</Text>
+                      <Text style={styles.activitySubtitle}>{item.subtitle}</Text>
+                    </View>
+                    <Text style={styles.activityMeta}>{item.meta}</Text>
+                  </View>
+                ))
+              )}
+            </Card>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -160,12 +292,18 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   headerRight: {
-    width: 40,
+    minWidth: 56,
     height: 40,
     borderRadius: 20,
     backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  levelText: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '700',
   },
   tabSelector: {
     flexDirection: 'row',
@@ -191,13 +329,22 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   mainScrollView: {
-    backgroundColor: '#F9FAFB', // Light grey background
+    backgroundColor: '#F9FAFB',
     flex: 1,
   },
   scrollContent: {
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl,
     paddingHorizontal: spacing.lg,
+  },
+  errorText: {
+    color: colors.danger,
+    fontSize: 14,
+    marginBottom: spacing.md,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
   },
   userInfoCard: {
     flexDirection: 'row',
@@ -216,6 +363,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#14532D',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: '900',
   },
   levelBadge: {
     position: 'absolute',
@@ -262,10 +414,12 @@ const styles = StyleSheet.create({
     color: '#16A34A',
     fontSize: 12,
     fontWeight: 'bold',
+    textTransform: 'capitalize',
   },
   rankText: {
     color: '#9CA3AF',
     fontSize: 13,
+    textTransform: 'capitalize',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -317,7 +471,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   achievementItem: {
-    width: '30%', // Fits 3 in a row
+    width: '30%',
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
@@ -330,9 +484,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  achievementValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 4,
+  },
   achievementText: {
     fontSize: 12,
     color: '#6B7280',
     textAlign: 'center',
-  }
+  },
+  activityCard: {
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  activityIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0FDF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  activityTextGroup: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  activitySubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  activityMeta: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  emptyStateText: {
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
+  },
 });

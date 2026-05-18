@@ -46,34 +46,31 @@ function UsersPage() {
 
   const calculateLevel = (points) => {
     const numericPoints = Number(points) || 0;
-    // Progression logic: 1 level per 1,000 points
+    // Progression logic: 1 level per 1,000 points (Matches your UI screenshot!)
     return Math.floor(numericPoints / 1000) + 1;
   };
 
   // 4. Dynamic Client-Side Filtering and Searching
   const filteredUsers = users.filter((user) => {
-    // Null safety fallback values to avoid application crashes
+    // Exact structural matching to your updated database columns
     const username = user.username || "";
     const email = user.email || "";
     const role = user.role || "User";
-    const isBanned =
-      user.is_banned === 1 ||
-      user.is_banned === "1" ||
-      user.status === "Banned";
+    const status = user.status || "Active";
 
-    // Search filter logic (matches Username or Email matches)
+    // Search filter logic (matches Username or Email)
     const matchesSearch =
       username.toLowerCase().includes(searchQuery.toLowerCase()) ||
       email.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
-    // Pill filter logic
+    // Pill filter logic mapped precisely to the new columns
     if (activeFilter === "Admins Only") {
       return role.toLowerCase() === "admin";
     }
     if (activeFilter === "Banned") {
-      return isBanned;
+      return status.toLowerCase() === "banned";
     }
     return true; // "All Users"
   });
@@ -170,10 +167,9 @@ function UsersPage() {
                 </tr>
               ) : (
                 filteredUsers.map((user) => {
-                  const isBanned =
-                    user.is_banned === 1 ||
-                    user.is_banned === "1" ||
-                    user.status === "Banned";
+                  const isAdmin = user.role?.toLowerCase() === "admin";
+                  const isBanned = user.status?.toLowerCase() === "banned";
+
                   return (
                     <tr key={user.id || user.email}>
                       <td>
@@ -184,11 +180,15 @@ function UsersPage() {
                       <td>
                         <div className="user-identity">
                           <strong>{user.username || "Unknown User"}</strong>
-                          <span>{user.email || "No Email Provided"}</span>
+                          <span>{user.email || "No Email"}</span>
                         </div>
                       </td>
                       <td>
-                        <span className="role-chip">{user.role || "User"}</span>
+                        <span
+                          className={`role-chip ${isAdmin ? "admin-mode" : ""}`}
+                        >
+                          {user.role || "User"}
+                        </span>
                       </td>
                       <td>Lvl {calculateLevel(user.points)}</td>
                       <td className="xp-cell">

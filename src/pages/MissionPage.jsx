@@ -289,16 +289,25 @@ function MissionPage() {
       .catch((err) => console.error("Error creating mission:", err));
   };
 
+  // 4. Dynamic Client-Side Filtering and Searching (Identical approach to your Users Page)
   const filteredMissions = missions.filter((mission) => {
+    // Null safety fallback values to avoid application crashes if columns are empty
     const title = mission.title || "";
+
+    // Check both standard schema column naming variants safely
+    const requirement = mission.requirement || mission.description || "";
     const routeName = mission.assigned_route || "";
     const currentStatus = mission.status || "Active";
 
+    // Omni-Search filter logic (Matches Title, Requirement, OR Assigned Route Name)
     const matchesSearch =
       title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      requirement.toLowerCase().includes(searchQuery.toLowerCase()) ||
       routeName.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
+
+    // Pill filter matching logic
     return currentStatus.toLowerCase() === activeFilter.toLowerCase();
   });
 

@@ -15,9 +15,11 @@ function UsersPage() {
   // CRUD Target Form States
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [editSelectedFile, setEditSelectedFile] = useState(null); // File tracking for update
 
-  // NEW: Invite/Add User States
+  // Invite/Add User States
   const [isAddingUser, setIsAddingUser] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null); // File tracking for create
   const [newUser, setNewUser] = useState({
     username: "",
     email: "",
@@ -51,7 +53,7 @@ function UsersPage() {
     fetchUsers();
   }, []);
 
-  // NEW: Backend Creation Handler (Create)
+  // Backend Creation Handler (Create)
   const handleCreateUser = (e) => {
     e.preventDefault();
 
@@ -62,6 +64,11 @@ function UsersPage() {
     formData.append("role", newUser.role);
     formData.append("status", newUser.status);
     formData.append("points", Number(newUser.points || 0));
+
+    // Append image payload if selected
+    if (selectedFile) {
+      formData.append("image_file", selectedFile);
+    }
 
     fetch("http://localhost/EcoQuest/api/index.php?endpoint=users", {
       method: "POST",
@@ -78,6 +85,7 @@ function UsersPage() {
       })
       .then(() => {
         setIsAddingUser(false);
+        setSelectedFile(null); // Reset file upload selection
         // Reset creation form
         setNewUser({
           username: "",
@@ -103,10 +111,20 @@ function UsersPage() {
     formData.append("status", editingUser.status || "Active");
     formData.append("points", Number(editingUser.points || 0));
 
+    // Include password change selectively if provided
+    if (editingUser.password) {
+      formData.append("password", editingUser.password);
+    }
+
+    // Append update image payload if selected
+    if (editSelectedFile) {
+      formData.append("image_file", editSelectedFile);
+    }
+
     fetch(
       `http://localhost/EcoQuest/api/index.php?endpoint=users&id=${editingUser.id}`,
       {
-        method: "POST", // Redirected seamlessly through the backend router matrix
+        method: "POST",
         body: formData,
       },
     )
@@ -121,6 +139,7 @@ function UsersPage() {
       })
       .then(() => {
         setEditingUser(null);
+        setEditSelectedFile(null); // Reset upload tracking selection
         fetchUsers(); // Refresh data grid
       })
       .catch((err) => alert(`Update Failed: ${err.message}`));
@@ -221,6 +240,32 @@ function UsersPage() {
 
   return (
     <section className="users-page">
+      <style>{`
+        .modal-overlay {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          display: flex; justify-content: center; align-items: center;
+          z-index: 9999;
+        }
+        .modal-card {
+          background: #fff; padding: 24px; border-radius: 8px;
+          max-width: 500px; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          color: #333;
+        }
+        .modal-card h2 { margin-top: 0; margin-bottom: 16px; font-size: 1.5rem; }
+        .modal-card label { display: block; margin-top: 12px; margin-bottom: 4px; font-weight: 600; font-size: 0.85rem;}
+        .modal-card input, .modal-card select { width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}
+        .modal-card input[type="file"] { border: none; padding: 4px 0; }
+        .form-row { display: flex; gap: 12px; margin-bottom: 4px; }
+        .form-row > div { flex: 1; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+        .modal-actions button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;}
+        .btn-cancel { background: #e0e0e0; color: #333; }
+        .btn-save { background: #4CAF50; color: white; }
+        .btn-confirm-delete { background: #f44336; color: white; }
+      `}</style>
+
       <Header
         title="User Management"
         subtitle="View, filter, and manage EcoQuest community members."
@@ -236,13 +281,12 @@ function UsersPage() {
             >
               Export CSV
             </button>
-            {/* UPDATED: Tied 'Invite User' action to toggle state */}
             <button
               type="button"
               className="filled-action"
               onClick={() => setIsAddingUser(true)}
             >
-              Invite User
+              Add User
             </button>
           </>
         }
@@ -376,7 +420,9 @@ function UsersPage() {
                           <button
                             type="button"
                             className="btn-inline-edit"
-                            onClick={() => setEditingUser({ ...user })}
+                            onClick={() =>
+                              setEditingUser({ ...user, password: "" })
+                            }
                           >
                             Edit
                           </button>
@@ -398,7 +444,7 @@ function UsersPage() {
         )}
       </section>
 
-      {/* --- NEW: INVITE/ADD USER MODAL --- */}
+      {/* --- INVITE/ADD USER MODAL --- */}
       {isAddingUser && (
         <div className="modal-overlay">
           <div className="modal-card">
@@ -475,11 +521,21 @@ function UsersPage() {
                 }
               />
 
+              <label>Profile Image File</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setSelectedFile(e.target.files[0])}
+              />
+
               <div className="modal-actions">
                 <button
                   type="button"
                   className="btn-cancel"
-                  onClick={() => setIsAddingUser(false)}
+                  onClick={() => {
+                    setIsAddingUser(false);
+                    setSelectedFile(null);
+                  }}
                 >
                   Cancel
                 </button>
@@ -516,6 +572,16 @@ function UsersPage() {
                   setEditingUser({ ...editingUser, email: e.target.value })
                 }
                 required
+              />
+
+              <label>Update Password (Leave blank to keep current)</label>
+              <input
+                type="password"
+                value={editingUser.password || ""}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, password: e.target.value })
+                }
+                placeholder="••••••••"
               />
 
               <div className="form-row">
@@ -556,11 +622,21 @@ function UsersPage() {
                 }
               />
 
+              <label>Change Profile Image</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setEditSelectedFile(e.target.files[0])}
+              />
+
               <div className="modal-actions">
                 <button
                   type="button"
                   className="btn-cancel"
-                  onClick={() => setEditingUser(null)}
+                  onClick={() => {
+                    setEditingUser(null);
+                    setEditSelectedFile(null);
+                  }}
                 >
                   Cancel
                 </button>

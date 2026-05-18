@@ -20,7 +20,14 @@ class UserController
                 mkdir($this->uploadDir, 0777, true);
             }
 
-            $fileExtension = pathinfo($_FILES['image_file']['name'], PATHINFO_EXTENSION);
+            $fileExtension = strtolower(pathinfo($_FILES['image_file']['name'], PATHINFO_EXTENSION));
+
+            // Basic security check for allowed image extensions
+            $allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            if (!in_array($fileExtension, $allowedExtensions)) {
+                return null;
+            }
+
             // Generates a random unguessable unique string to prevent naming conflicts
             $newFileName = uniqid('user_', true) . '.' . $fileExtension;
             $targetFilePath = $this->uploadDir . $newFileName;
@@ -34,7 +41,6 @@ class UserController
 
     /**
      * FETCH ALL USERS (GET)
-     * Directly echoes response internally to match your api/index.php structure
      */
     public function getAllUsers()
     {
@@ -74,7 +80,7 @@ class UserController
             if ($user) {
                 $user['id'] = (int) $user['id'];
                 $user['points'] = (int) $user['points'];
-                return $user; // Returns structure matching wrapper in api/index.php
+                return $user;
             }
 
             http_response_code(404);
@@ -96,11 +102,11 @@ class UserController
                 return;
             }
 
-            $username = strip_tags($_POST['username']);
-            $email = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL);
+            $username = strip_tags(trim($_POST['username']));
+            $email = filter_var(trim($_POST['email']), FILTER_VALIDATE_EMAIL);
             $password_hash = password_hash($_POST['password'], PASSWORD_BCRYPT);
-            $role = !empty($_POST['role']) ? $_POST['role'] : 'User';
-            $status = !empty($_POST['status']) ? $_POST['status'] : 'Active';
+            $role = !empty($_POST['role']) ? strip_tags($_POST['role']) : 'User';
+            $status = !empty($_POST['status']) ? strip_tags($_POST['status']) : 'Active';
             $points = isset($_POST['points']) ? (int) $_POST['points'] : 0;
 
             if (!$email) {
@@ -109,9 +115,8 @@ class UserController
                 return;
             }
 
-            // Check file upload or fallback to standard placeholder string values
             $uploadedFile = $this->handleUserImageUpload();
-            $image_url = $uploadedFile ? $uploadedFile : (!empty($_POST['image_url']) ? $_POST['image_url'] : 'default-user.png');
+            $image_url = $uploadedFile ? $uploadedFile : (!empty($_POST['image_url']) ? strip_tags($_POST['image_url']) : 'default-user.png');
 
             $query = "INSERT INTO users (username, email, password_hash, role, status, points, image_url) 
                       VALUES (:username, :email, :password_hash, :role, :status, :points, :image_url)";
@@ -132,14 +137,15 @@ class UserController
                 http_response_code(500);
                 echo json_encode(["success" => false, "message" => "Failed to write user row metrics."]);
             }
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(["success" => false, "message" => "Server error: " . $e->getMessage()]);
+        } catch (PDOException $e) {
+            http_response_code($e->getCode() == 23000 ? 409 : 500);
+            $msg = $e->getCode() == 23000 ? "Username or Email already registered." : "Server error: " . $e->getMessage();
+            echo json_encode(["success" => false, "message" => $msg]);
         }
     }
 
     /**
-     * UPDATE EXISTING USER ACCOUNT DETAILS (POST with id redirect fallback)
+     * UPDATE EXISTING USER ACCOUNT DETAILS (POST)
      */
     public function updateUser($id)
     {
@@ -150,57 +156,67 @@ class UserController
                 return;
             }
 
-            $username = strip_tags($_POST['username']);
-            $email = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL);
-            $role = $_POST['role'];
-            $status = $_POST['status'];
-            $points = (int) $_POST['points'];
+            // Ensure basic update elements are set or fallback to what they should be
+            if (empty($_POST['username']) || empty($_POST['email'])) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Username and Email fields cannot be saved blank."]);
+                return;
+            }
 
+            $username = strip_tags(trim($_POST['username']));
+            $email = filter_var(trim($_POST['email']), FILTER_VALIDATE_EMAIL);
+            if (!$email) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Invalid email validation format parameters."]);
+                return;
+            }
+
+            // Programmatic building blocks for a safe dynamic update query
+            $fieldsToUpdate = [
+                "username = :username",
+                "email = :email",
+                "role = :role",
+                "status = :status",
+                "points = :points"
+            ];
+
+            $params = [
+                ':username' => $username,
+                ':email' => $email,
+                ':role' => !empty($_POST['role']) ? strip_tags($_POST['role']) : 'User',
+                ':status' => !empty($_POST['status']) ? strip_tags($_POST['status']) : 'Active',
+                ':points' => isset($_POST['points']) ? (int) $_POST['points'] : 0,
+                ':id' => (int) $id
+            ];
+
+            // 1. Dynamic conditional update for Passwords
+            if (!empty($_POST['password'])) {
+                $fieldsToUpdate[] = "password_hash = :password_hash";
+                $params[':password_hash'] = password_hash($_POST['password'], PASSWORD_BCRYPT);
+            }
+
+            // 2. Dynamic conditional update for File Uploads
             $uploadedFile = $this->handleUserImageUpload();
-
-            // Form dynamic sql query based on whether we are overwriting the profile image file field mapping values
             if ($uploadedFile) {
-                $query = "UPDATE users SET username = :username, email = :email, role = :role, status = :status, points = :points, image_url = :image_url WHERE id = :id";
-            } else {
-                $query = "UPDATE users SET username = :username, email = :email, role = :role, status = :status, points = :points WHERE id = :id";
+                $fieldsToUpdate[] = "image_url = :image_url";
+                $params[':image_url'] = $uploadedFile;
             }
 
-            // Optional branch check execution if password payload modification values are supplied
-            if (!empty($_POST['password'])) {
-                if ($uploadedFile) {
-                    $query = "UPDATE users SET username = :username, email = :email, password_hash = :password_hash, role = :role, status = :status, points = :points, image_url = :image_url WHERE id = :id";
-                } else {
-                    $query = "UPDATE users SET username = :username, email = :email, password_hash = :password_hash, role = :role, status = :status, points = :points WHERE id = :id";
-                }
-            }
-
+            // Construct final secure clean statement string
+            $query = "UPDATE users SET " . implode(", ", $fieldsToUpdate) . " WHERE id = :id";
             $stmt = $this->db->prepare($query);
-            $stmt->bindParam(':username', $username);
-            $stmt->bindParam(':email', $email);
-            $stmt->bindParam(':role', $role);
-            $stmt->bindParam(':status', $status);
-            $stmt->bindParam(':points', $points, PDO::PARAM_INT);
-            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
 
-            if (!empty($_POST['password'])) {
-                $newHash = password_hash($_POST['password'], PASSWORD_BCRYPT);
-                $stmt->bindParam(':password_hash', $newHash);
-            }
-
-            if ($uploadedFile) {
-                $stmt->bindParam(':image_url', $uploadedFile);
-            }
-
-            if ($stmt->execute()) {
+            if ($stmt->execute($params)) {
                 http_response_code(200);
                 echo json_encode(["success" => true, "message" => "User account updated successfully."]);
             } else {
                 http_response_code(500);
                 echo json_encode(["success" => false, "message" => "Failed to execute changes on target database record rows."]);
             }
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(["success" => false, "message" => "System execution error: " . $e->getMessage()]);
+        } catch (PDOException $e) {
+            http_response_code($e->getCode() == 23000 ? 409 : 500);
+            $msg = $e->getCode() == 23000 ? "Conflict error: Username or Email is already taken." : "System execution error: " . $e->getMessage();
+            echo json_encode(["success" => false, "message" => $msg]);
         }
     }
 

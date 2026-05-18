@@ -247,7 +247,28 @@ elseif ($endpoint === 'submissions') {
             break;
     }
 
-} else {
+} elseif ($endpoint === 'notifications-count') {
+    if ($method === 'GET') {
+        try {
+            // Re-using the $dbConn instance instantiated at the top of your index file
+            $stmt = $dbConn->query("SELECT COUNT(*) as total FROM trash_submissions WHERE status = 'Pending'");
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                "count" => (int) $result['total']
+            ]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["error" => "Failed to fetch notification counts: " . $e->getMessage()]);
+        }
+    } else {
+        http_response_code(405);
+        echo json_encode(["message" => "Method Not Allowed for notification checks."]);
+    }
+}
+
+// Final fallback wrapper logic (Keep this exactly as you had it)
+else {
     http_response_code(404);
     echo json_encode(["message" => "Endpoint not found."]);
 }

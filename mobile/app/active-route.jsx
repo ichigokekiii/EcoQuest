@@ -12,7 +12,6 @@ import {
   finishRouteSession,
   getActiveRouteSession,
   getRouteById,
-  getRouteMissions,
   getRouteSessionById,
 } from '../src/services/api';
 
@@ -51,7 +50,6 @@ export default function ActiveRouteScreen() {
   const [loading, setLoading] = useState(true);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [session, setSession] = useState(null);
-  const [routeMissions, setRouteMissions] = useState([]);
   const [finishing, setFinishing] = useState(false);
 
   // Reanimated Bottom Sheet State
@@ -106,21 +104,16 @@ export default function ActiveRouteScreen() {
       if (!resolvedSession) {
         setSession(null);
         setRoute(null);
-        setRouteMissions([]);
         setLoading(false);
         return;
       }
 
       const routeId = resolvedSession.routeId || id;
-      const [routeResponse, missionsResponse] = await Promise.all([
-        getRouteById(routeId),
-        getRouteMissions(routeId),
-      ]);
+      const routeResponse = await getRouteById(routeId);
 
       setSession(resolvedSession);
       setRouteCoordinates([]);
       setRoute(normalizeRoute(routeResponse.route || routeResponse));
-      setRouteMissions(missionsResponse.missions || []);
       setLoading(false);
     } catch (error) {
       console.log('Error fetching active route state:', error);
@@ -151,13 +144,20 @@ export default function ActiveRouteScreen() {
     );
   }
 
-  const trashTarget = route.targetTrash || route.minimumTrashRequired || session.requiredTrashCount || 0;
+  const requiredTrashCount = Number(session.requiredTrashCount || 0);
+  const visualProgressTarget = Number(
+    session.visualMaxGoal || session.requiredTrashCount || 0
+  );
   const approvedTrashCount = Number(session.approvedTrashCount || 0);
   const submittedTrashCount = Number(session.trashCollected || 0);
   const pendingReviewCount = Math.max(submittedTrashCount - approvedTrashCount, 0);
-  const progressPercent = trashTarget > 0 ? Math.min((approvedTrashCount / trashTarget) * 100, 100) : 0;
-  const canFinish = approvedTrashCount >= session.requiredTrashCount;
-  const approvedPointsPreview = approvedTrashCount * 5;
+  const progressPercent =
+    visualProgressTarget > 0
+      ? Math.min((approvedTrashCount / visualProgressTarget) * 100, 100)
+      : 0;
+  const canFinish = approvedTrashCount >= requiredTrashCount;
+  const pointsPerTrash = Number(route.pointsPerTrash || 5);
+  const approvedPointsPreview = approvedTrashCount * pointsPerTrash;
   const missionProgress = session.missionProgress || [];
 
   return (
@@ -270,7 +270,7 @@ export default function ActiveRouteScreen() {
                 <Text style={styles.sheetSubtitle}>APPROVED TRASH</Text>
                 <View style={styles.countRow}>
                   <Text style={styles.largeCount}>{approvedTrashCount}</Text>
-                  <Text style={styles.subCount}>/ {trashTarget}</Text>
+                  <Text style={styles.subCount}>/ {visualProgressTarget}</Text>
                 </View>
               </View>
               <View style={styles.pointsTextContainer}>
@@ -285,8 +285,11 @@ export default function ActiveRouteScreen() {
               </View>
               <View style={styles.progressLabels}>
                 <Text style={styles.progressLabelText}>Approved: {approvedTrashCount}</Text>
-                <Text style={styles.progressLabelActive}>Goal: {trashTarget}</Text>
+                <Text style={styles.progressLabelActive}>Goal: {visualProgressTarget}</Text>
               </View>
+              <Text style={styles.progressMinimumText}>
+                Minimum to finish: {requiredTrashCount}
+              </Text>
             </View>
 
             <View style={styles.reviewSummaryRow}>
@@ -305,8 +308,8 @@ export default function ActiveRouteScreen() {
               {canFinish
                 ? 'Minimum approved requirement reached. You can finish now or keep collecting for bonus points.'
                 : pendingReviewCount > 0
-                  ? `${pendingReviewCount} submitted item${pendingReviewCount === 1 ? '' : 's'} still need review. You need ${Math.max(session.requiredTrashCount - approvedTrashCount, 0)} more approved item${Math.max(session.requiredTrashCount - approvedTrashCount, 0) === 1 ? '' : 's'} to finish.`
-                  : `Collect ${Math.max(session.requiredTrashCount - approvedTrashCount, 0)} more approved item${Math.max(session.requiredTrashCount - approvedTrashCount, 0) === 1 ? '' : 's'} to complete the route.`}
+                  ? `${pendingReviewCount} submitted item${pendingReviewCount === 1 ? '' : 's'} still need review. You need ${Math.max(requiredTrashCount - approvedTrashCount, 0)} more approved item${Math.max(requiredTrashCount - approvedTrashCount, 0) === 1 ? '' : 's'} to finish.`
+                  : `Collect ${Math.max(requiredTrashCount - approvedTrashCount, 0)} more approved item${Math.max(requiredTrashCount - approvedTrashCount, 0) === 1 ? '' : 's'} to complete the route.`}
             </Text>
 
             {missionProgress.length > 0 && (
@@ -316,7 +319,7 @@ export default function ActiveRouteScreen() {
                     <View style={styles.missionProgressTextGroup}>
                       <Text style={styles.missionProgressTitle}>{mission.title}</Text>
                       <Text style={styles.missionProgressSubtitle}>
-                        {mission.currentCount} / {mission.requiredCount}
+                        {mission.currentCount || 0} / {mission.requiredCount || 0}
                       </Text>
                     </View>
                     <Feather
@@ -324,21 +327,6 @@ export default function ActiveRouteScreen() {
                       size={18}
                       color={mission.isCompleted ? '#16A34A' : '#D1D5DB'}
                     />
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {routeMissions.length > 0 && missionProgress.length === 0 && (
-              <View style={styles.missionProgressList}>
-                {routeMissions.slice(0, 3).map((mission) => (
-                  <View key={mission.id} style={styles.missionProgressItem}>
-                    <View style={styles.missionProgressTextGroup}>
-                      <Text style={styles.missionProgressTitle}>{mission.title}</Text>
-                      <Text style={styles.missionProgressSubtitle}>
-                        Collect {mission.requiredTrashCount || 0} {mission.trashCategoryName || 'items'}
-                      </Text>
-                    </View>
                   </View>
                 ))}
               </View>
@@ -605,6 +593,12 @@ const styles = StyleSheet.create({
     color: '#D97706',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  progressMinimumText: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 4,
   },
   reviewSummaryRow: {
     flexDirection: 'row',

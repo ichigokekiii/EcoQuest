@@ -177,6 +177,7 @@ function createInitialState() {
     {
       id: 'mission-1',
       routeId: 'route-1',
+      routeIds: ['route-1'],
       title: 'Collect 5 plastic bottles',
       requiredTrashCount: 5,
       trashCategoryId: 'plastic',
@@ -187,11 +188,23 @@ function createInitialState() {
     {
       id: 'mission-2',
       routeId: 'route-2',
+      routeIds: ['route-2'],
       title: 'Collect 8 plastic items',
       requiredTrashCount: 8,
       trashCategoryId: 'cat-plastic',
       trashCategoryName: 'Plastic',
       pointsReward: 30,
+      status: 'active',
+    },
+    {
+      id: 'mission-shared',
+      routeId: 'route-1',
+      routeIds: ['route-1', 'route-2'],
+      title: 'Collect 4 mixed items',
+      requiredTrashCount: 4,
+      trashCategoryId: 'mixed-waste',
+      trashCategoryName: 'Mixed Waste',
+      pointsReward: 15,
       status: 'active',
     },
   ];
@@ -371,7 +384,10 @@ function getDashboardData() {
 
 function getMissionsByRoute(routeId) {
   return state.missionDefinitions.filter(
-    (mission) => mission.routeId === routeId && mission.status === 'active'
+    (mission) =>
+      (Array.isArray(mission.routeIds)
+        ? mission.routeIds.includes(routeId)
+        : mission.routeId === routeId) && mission.status === 'active'
   );
 }
 

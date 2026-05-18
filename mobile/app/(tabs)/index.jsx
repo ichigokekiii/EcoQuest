@@ -162,7 +162,12 @@ export default function HomeDashboardScreen() {
                       activeSession
                         ? Math.min(
                             ((activeSession.approvedTrashCount || 0) /
-                              Math.max(activeSession.requiredTrashCount || 1, 1)) *
+                              Math.max(
+                                activeSession.visualMaxGoal ||
+                                  activeSession.requiredTrashCount ||
+                                  1,
+                                1
+                              )) *
                               100,
                             100
                           )

@@ -9,7 +9,7 @@ import api from '../services/api';
 
 const emptyMissionForm = {
   title: '',
-  routeId: '',
+  routeIds: [],
   requiredTrashCount: '5',
   trashCategoryId: '',
   trashCategoryName: '',
@@ -17,10 +17,18 @@ const emptyMissionForm = {
   status: 'active',
 };
 
+function normalizeMissionRouteIds(mission) {
+  if (Array.isArray(mission.routeIds) && mission.routeIds.length > 0) {
+    return mission.routeIds;
+  }
+
+  return mission.routeId ? [mission.routeId] : [];
+}
+
 function buildMissionForm(mission) {
   return {
     title: mission.title || '',
-    routeId: mission.routeId || '',
+    routeIds: normalizeMissionRouteIds(mission),
     requiredTrashCount: String(mission.requiredTrashCount ?? '5'),
     trashCategoryId: mission.trashCategoryId || '',
     trashCategoryName: mission.trashCategoryName || '',
@@ -29,13 +37,13 @@ function buildMissionForm(mission) {
   };
 }
 
-function MissionForm({ editingMissionId, onCancel, form, routes, categories, saving, onChange, onSubmit }) {
+function MissionForm({ editingMissionId, onCancel, form, routes, categories, saving, onChange, onRouteToggle, onSubmit }) {
   return (
     <section className="data-card page-form-card collapsible-form">
       <div className="section-head">
         <div>
           <h2>{editingMissionId ? 'Edit Mission' : 'Create Mission'}</h2>
-          <p>Attach cleanup goals to admin-created routes.</p>
+          <p>Attach cleanup goals to one or more admin-created routes.</p>
         </div>
         <button className="outline-action" onClick={onCancel} type="button">
           Close
@@ -48,17 +56,29 @@ function MissionForm({ editingMissionId, onCancel, form, routes, categories, sav
           <input name="title" onChange={onChange} required value={form.title} />
         </label>
 
-        <label className="field">
-          <span>Route</span>
-          <select name="routeId" onChange={onChange} required value={form.routeId}>
-            <option value="">Choose route</option>
-            {routes.map((route) => (
-              <option key={route.id} value={route.id}>
-                {route.name || route.title}
-              </option>
-            ))}
-          </select>
-        </label>
+        <fieldset className="field wide mission-route-fieldset">
+          <legend>Routes</legend>
+          {routes.length === 0 ? (
+            <p className="muted">Create a route before attaching missions.</p>
+          ) : (
+            <div className="mission-route-checklist">
+              {routes.map((route) => {
+                const isChecked = form.routeIds.includes(route.id);
+
+                return (
+                  <label className="mission-route-option" key={route.id}>
+                    <input
+                      checked={isChecked}
+                      onChange={() => onRouteToggle(route.id)}
+                      type="checkbox"
+                    />
+                    <span>{route.name || route.title}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </fieldset>
 
         <label className="field">
           <span>Trash Category</span>
@@ -105,7 +125,7 @@ function MissionForm({ editingMissionId, onCancel, form, routes, categories, sav
         </label>
 
         <div className="form-actions">
-          <button className="filled-action" disabled={saving} type="submit">
+          <button className="filled-action" disabled={saving || form.routeIds.length === 0} type="submit">
             {saving ? 'Saving...' : editingMissionId ? 'Update Mission' : 'Create Mission'}
           </button>
         </div>
@@ -146,7 +166,12 @@ export default function MissionPage() {
       setCategories(nextCategories);
       setMissionForm((currentForm) => ({
         ...currentForm,
-        routeId: currentForm.routeId || nextRoutes[0]?.id || '',
+        routeIds:
+          currentForm.routeIds.length > 0
+            ? currentForm.routeIds
+            : nextRoutes[0]?.id
+              ? [nextRoutes[0].id]
+              : [],
         trashCategoryId: currentForm.trashCategoryId || nextCategories[0]?.id || '',
         trashCategoryName: currentForm.trashCategoryName || nextCategories[0]?.name || '',
       }));
@@ -166,11 +191,15 @@ export default function MissionPage() {
   }, [routes]);
 
   const filteredMissions = useMemo(() => {
-    return missions.filter((mission) =>
-      `${mission.title || ''} ${routeNamesById[mission.routeId] || ''}`
+    return missions.filter((mission) => {
+      const routeLabels = normalizeMissionRouteIds(mission)
+        .map((routeId) => routeNamesById[routeId] || '')
+        .join(' ');
+
+      return `${mission.title || ''} ${routeLabels}`
         .toLowerCase()
-        .includes(searchQuery.toLowerCase())
-    );
+        .includes(searchQuery.toLowerCase());
+    });
   }, [missions, routeNamesById, searchQuery]);
 
   const activeMissions = missions.filter((mission) => (mission.status || 'active') === 'active');
@@ -181,6 +210,16 @@ export default function MissionPage() {
     setMissionForm((currentForm) => ({ ...currentForm, [name]: value }));
   }
 
+  function handleRouteToggle(routeId) {
+    setMissionForm((currentForm) => {
+      const routeIds = currentForm.routeIds.includes(routeId)
+        ? currentForm.routeIds.filter((id) => id !== routeId)
+        : [...currentForm.routeIds, routeId];
+
+      return { ...currentForm, routeIds };
+    });
+  }
+
   async function handleSubmitMission(event) {
     event.preventDefault();
     setSaving(true);
@@ -188,9 +227,15 @@ export default function MissionPage() {
     setSuccessMessage('');
 
     try {
+      const payload = {
+        ...missionForm,
+        routeIds: missionForm.routeIds,
+        routeId: missionForm.routeIds[0] || '',
+      };
+
       const response = editingMissionId
-        ? await api.patch(`/admin/missions/${editingMissionId}`, missionForm)
-        : await api.post('/admin/missions', missionForm);
+        ? await api.patch(`/admin/missions/${editingMissionId}`, payload)
+        : await api.post('/admin/missions', payload);
 
       setMissions((currentMissions) => [
         response.data.mission,
@@ -198,7 +243,7 @@ export default function MissionPage() {
       ]);
       setMissionForm((currentForm) => ({
         ...emptyMissionForm,
-        routeId: currentForm.routeId,
+        routeIds: currentForm.routeIds,
         trashCategoryId: currentForm.trashCategoryId,
         trashCategoryName: currentForm.trashCategoryName,
       }));
@@ -244,7 +289,7 @@ export default function MissionPage() {
               setEditingMissionId(null);
               setMissionForm({
                 ...emptyMissionForm,
-                routeId: routes[0]?.id || '',
+                routeIds: routes[0]?.id ? [routes[0].id] : [],
                 trashCategoryId: categories[0]?.id || '',
                 trashCategoryName: categories[0]?.name || '',
               });
@@ -275,6 +320,7 @@ export default function MissionPage() {
             setEditingMissionId(null);
           }}
           onChange={handleFormChange}
+          onRouteToggle={handleRouteToggle}
           onSubmit={handleSubmitMission}
           routes={routes}
           saving={saving}
@@ -302,7 +348,13 @@ export default function MissionPage() {
         <section className="mission-grid">
           {filteredMissions.map((mission) => {
             const isActive = (mission.status || 'active') === 'active';
-            const routeName = routeNamesById[mission.routeId] || 'Any';
+            const linkedRouteIds = normalizeMissionRouteIds(mission);
+            const routeLabel =
+              linkedRouteIds.length === 0
+                ? 'Any'
+                : linkedRouteIds.length === 1
+                  ? routeNamesById[linkedRouteIds[0]] || 'Route'
+                  : `${linkedRouteIds.length} routes`;
 
             return (
               <article className="mission-card mission-card-mockup" key={mission.id}>
@@ -330,13 +382,13 @@ export default function MissionPage() {
 
                 <p className="mission-card-desc">
                   Collect {mission.requiredTrashCount || 0}{' '}
-                  {mission.trashCategoryName || 'trash items'} on {routeName}.
+                  {mission.trashCategoryName || 'trash items'} on {routeLabel}.
                 </p>
 
                 <div className="mission-card-footer-mockup">
                   <div className="mission-card-footer-meta">
                     <PointsValue value={mission.pointsReward} />
-                    <span>{routeName}</span>
+                    <span>{routeLabel}</span>
                     <span>{mission.completedCount ?? 0} completed</span>
                   </div>
                   <div className="table-actions">

@@ -13,6 +13,7 @@ const {
   saveCorrectionExample,
 } = require('../services/categoryMemoryService');
 const { uploadTrashProofImage } = require('../services/trashImageStorageService');
+const { fetchActiveMissionsForRoute } = require('../utils/missionRouteHelpers');
 
 function createHttpError(statusCode, message) {
   const error = new Error(message);
@@ -162,13 +163,7 @@ async function createRouteSession(req, res, next) {
       });
     }
 
-    const missionSnapshot = await db
-      .collection('missions')
-      .where('routeId', '==', req.params.routeId)
-      .where('status', '==', 'active')
-      .get();
-
-    const missions = missionSnapshot.docs.map(serializeDoc);
+    const missions = await fetchActiveMissionsForRoute(db, req.params.routeId);
     const timestamp = admin.firestore.Timestamp.now();
     const sessionData = {
       userId: req.user.id,

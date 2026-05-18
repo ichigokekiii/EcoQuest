@@ -111,6 +111,7 @@ const demoMission = {
   title: 'Collect 3 trash items',
   description: 'Submit at least 3 valid trash photos along this route.',
   routeId,
+  routeIds: [routeId],
   type: 'route',
   requiredTrashCount: 3,
   trashCategoryId: null,

@@ -5,6 +5,7 @@ const {
   getMissionOverview,
   getMissionProgress,
 } = require('../mock/mockData');
+const { fetchActiveMissionsForRoute, normalizeRouteIds } = require('../utils/missionRouteHelpers');
 
 function sortByLatest(items = [], keys = ['updatedAt', 'createdAt']) {
   return [...items].sort((first, second) => {
@@ -81,8 +82,13 @@ async function getMissions(req, res, next) {
         subtitle: mission.trashCategoryName
           ? `Collect ${target} ${mission.trashCategoryName}`
           : `Collect ${target} items`,
-        routeId: mission.routeId,
-        routeName: routesById[mission.routeId] || 'Cleanup Route',
+        routeId: normalizeRouteIds(mission)[0] || mission.routeId || null,
+        routeIds: normalizeRouteIds(mission),
+        routeName:
+          normalizeRouteIds(mission)
+            .map((linkedRouteId) => routesById[linkedRouteId])
+            .filter(Boolean)
+            .join(', ') || 'Cleanup Route',
         trashCategoryId: mission.trashCategoryId || null,
         trashCategoryName: mission.trashCategoryName || null,
         pointsReward: Number(mission.pointsReward || 0),
@@ -137,13 +143,7 @@ async function getMissionsByRoute(req, res, next) {
       return res.json({ missions: getMockMissionsByRoute(req.params.routeId) });
     }
 
-    const snapshot = await getDb()
-      .collection('missions')
-      .where('routeId', '==', req.params.routeId)
-      .where('status', '==', 'active')
-      .get();
-
-    const missions = snapshot.docs.map(serializeDoc);
+    const missions = await fetchActiveMissionsForRoute(getDb(), req.params.routeId);
 
     res.json({ missions });
   } catch (error) {

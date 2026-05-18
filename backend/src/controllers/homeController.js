@@ -84,6 +84,9 @@ async function getDashboard(req, res, next) {
             trashCollected: Number(activeSession.trashCollected || 0),
             approvedTrashCount: Number(activeSession.approvedTrashCount || 0),
             requiredTrashCount: Number(activeSession.requiredTrashCount || 0),
+            visualMaxGoal: Number(
+              activeSession.visualMaxGoal || activeSession.requiredTrashCount || 0
+            ),
           }
         : null,
       activeMission,

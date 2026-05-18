@@ -36,6 +36,8 @@ function normalizeRoute(route) {
       longitudeDelta: 0.02,
     },
     targetTrash: route.targetTrash || route.minimumTrashRequired || 0,
+    visualMaxGoal:
+      route.visualMaxGoal || route.targetTrash || route.minimumTrashRequired || 0,
   };
 }
 
@@ -216,15 +218,15 @@ export default function RouteDetailsScreen() {
         <Text style={styles.sectionTitle}>Trash Goal</Text>
         <Card style={styles.trashGoalCard}>
           <View style={styles.trashGoalHeader}>
-            <Text style={styles.trashGoalLabel}>Goal target</Text>
+            <Text style={styles.trashGoalLabel}>Minimum to finish</Text>
             <Text style={styles.trashGoalTarget}>{route.targetTrash || route.minimumTrashRequired || 0} items</Text>
           </View>
           <View style={styles.goalProgressBarBg}>
-            <View style={[styles.goalProgressBarFill, { width: '50%' }]} />
+            <View style={[styles.goalProgressBarFill, { width: '0%' }]} />
           </View>
           <View style={styles.goalProgressLabels}>
             <Text style={styles.goalProgressSubtext}>0</Text>
-            <Text style={styles.goalProgressActive}>Goal: {route.targetTrash || route.minimumTrashRequired || 0}</Text>
+            <Text style={styles.goalProgressActive}>Goal: {route.visualMaxGoal || route.targetTrash || route.minimumTrashRequired || 0}</Text>
           </View>
         </Card>
 
@@ -240,7 +242,7 @@ export default function RouteDetailsScreen() {
                 <View style={styles.cardTextContent}>
                   <Text style={styles.missionTitle}>{mission.title}</Text>
                   <Text style={styles.missionSubtitle}>
-                    Collect {mission.requiredTrashCount || mission.requiredCount || 0}{' '}
+                    0 / {mission.requiredTrashCount || mission.requiredCount || 0}{' '}
                     {mission.trashCategoryName || 'items'}
                   </Text>
                 </View>

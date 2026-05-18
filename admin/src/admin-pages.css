@@ -1260,6 +1260,31 @@
   color: var(--text-muted);
 }
 
+.mission-route-fieldset {
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.mission-route-fieldset legend {
+  padding: 0 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.mission-route-checklist {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mission-route-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
 .reward-pastel-header {
   min-height: 108px;
   display: grid;

@@ -35,10 +35,15 @@ function sortByUpdatedAt(items) {
   );
 }
 
+const { buildMissionRouteFields } = require('../utils/missionRouteHelpers');
+
 function buildMissionData(body, currentMission = {}) {
+  const { routeIds, routeId } = buildMissionRouteFields(body, currentMission);
+
   return {
     title: body.title ?? currentMission.title ?? 'Untitled Mission',
-    routeId: body.routeId ?? currentMission.routeId ?? '',
+    routeIds,
+    routeId,
     requiredTrashCount:
       body.requiredTrashCount !== undefined
         ? toNumber(body.requiredTrashCount, 1)

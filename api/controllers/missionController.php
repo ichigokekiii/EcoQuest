@@ -53,4 +53,16 @@ class MissionController
         }
         return ["success" => false, "message" => "Failed to update mission."];
     }
+
+    public function deleteMission($id)
+    {
+        $query = "DELETE FROM " . $this->table . " WHERE id = :id";
+        $stmt = $this->db->prepare($query);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+        if ($stmt->execute()) {
+            return ["success" => true, "message" => "Mission deleted successfully."];
+        }
+        return ["success" => false, "message" => "Failed to delete mission."];
+    }
 }

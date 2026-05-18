@@ -133,9 +133,26 @@ elseif ($endpoint === 'missions') {
             echo json_encode($missionController->updateMission($id, $data));
             break;
 
+        case 'DELETE':
+            if ($id === null) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Bad Request: Missing mission ID for deletion."]);
+                break;
+            }
+            echo json_encode($missionController->deleteMission($id));
+            break;
+
         default:
             http_response_code(405);
             echo json_encode(["message" => "Method Not Allowed"]);
+            break;
+        case 'DELETE':
+            if ($id === null) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Bad Request: Missing mission ID for deletion."]);
+                break;
+            }
+            echo json_encode($missionController->deleteMission($id));
             break;
     }
 } else {

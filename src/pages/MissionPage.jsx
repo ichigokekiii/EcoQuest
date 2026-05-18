@@ -6,7 +6,6 @@ const missionFilters = ["Active", "Scheduled", "Archived"];
 function MissionCard({ mission, onSaveSuccess }) {
   const [isEditing, setIsEditing] = useState(false);
 
-  // Local form states synced with incoming mission properties
   const [editForm, setEditForm] = useState({
     title: mission.title || "",
     requirement: mission.requirement || mission.description || "",
@@ -36,12 +35,38 @@ function MissionCard({ mission, onSaveSuccess }) {
       .then((data) => {
         if (data.success) {
           setIsEditing(false);
-          onSaveSuccess(); // Refresh parent view array metrics
+          onSaveSuccess();
         } else {
           alert(data.message || "Failed to update database record.");
         }
       })
       .catch((err) => console.error("Error updating mission:", err));
+  };
+
+  // 🔴 Trigger network removal with native confirmation guard
+  const handleDelete = () => {
+    if (
+      window.confirm(
+        `Are you sure you want to permanently delete "${editForm.title}"?`,
+      )
+    ) {
+      fetch(
+        `http://localhost/EcoQuest/api/index.php?endpoint=missions&id=${mission.id}`,
+        {
+          method: "DELETE",
+        },
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            setIsEditing(false);
+            onSaveSuccess(); // Refresh the grid layout arrays
+          } else {
+            alert(data.message || "Failed to delete mission row.");
+          }
+        })
+        .catch((err) => console.error("Error deleting mission:", err));
+    }
   };
 
   return (
@@ -139,6 +164,19 @@ function MissionCard({ mission, onSaveSuccess }) {
       <div className="mission-card-actions">
         {isEditing ? (
           <>
+            {/* 🛑 Added style hook placeholder for distinct visual styling if needed */}
+            <button
+              type="button"
+              className="mission-button danger"
+              onClick={handleDelete}
+              style={{
+                marginRight: "auto",
+                backgroundColor: "#dc3545",
+                color: "#fff",
+              }}
+            >
+              Delete
+            </button>
             <button
               type="button"
               className="mission-button secondary"

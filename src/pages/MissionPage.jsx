@@ -3,30 +3,85 @@ import Header from "../components/Header";
 
 const missionFilters = ["Active", "Scheduled", "Archived"];
 
-function MissionCard({ mission }) {
-  // Gracefully handle raw columns coming straight from your database query
+function MissionCard({ mission, onSaveSuccess }) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Local form states synced with incoming mission properties
+  const [editForm, setEditForm] = useState({
+    title: mission.title || "",
+    requirement: mission.requirement || mission.description || "",
+    date_range: mission.date_range || "",
+    xp_reward: mission.xp_reward || 0,
+    status: mission.status || "Active",
+  });
+
   const displayId = mission.id ? `MS-${mission.id}` : "N/A";
   const displayRoute = mission.assigned_route || "Unassigned Route";
-  const displayRequirement =
-    mission.requirement || mission.description || "No specific target";
-  const displayReward = mission.xp_reward ? `+${mission.xp_reward} XP` : "0 XP";
 
-  // Use dates from database if present, otherwise fallback to mock data seen in your UI mockup
-  const displayDate = mission.date_range || "Oct 12 - Oct 14";
-  const displayStatus = mission.status || "Active";
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSave = () => {
+    fetch(
+      `http://localhost/EcoQuest/api/index.php?endpoint=missions&id=${mission.id}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      },
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setIsEditing(false);
+          onSaveSuccess(); // Refresh parent view array metrics
+        } else {
+          alert(data.message || "Failed to update database record.");
+        }
+      })
+      .catch((err) => console.error("Error updating mission:", err));
+  };
 
   return (
     <article className="mission-card">
       <div className="mission-card-header">
         <div>
-          <h3>{mission.title || "Untitled Mission"}</h3>
+          {isEditing ? (
+            <input
+              type="text"
+              name="title"
+              className="edit-input title-field"
+              value={editForm.title}
+              onChange={handleChange}
+            />
+          ) : (
+            <h3>{mission.title || "Untitled Mission"}</h3>
+          )}
           <p className="mission-card-id">ID: {displayId}</p>
         </div>
-        <span
-          className={`mission-card-badge mission-card-badge-${displayStatus.toLowerCase()}`}
-        >
-          {displayStatus}
-        </span>
+
+        {isEditing ? (
+          <select
+            name="status"
+            className="edit-input"
+            value={editForm.status}
+            onChange={handleChange}
+          >
+            {missionFilters.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span
+            className={`mission-card-badge mission-card-badge-${editForm.status.toLowerCase()}`}
+          >
+            {editForm.status}
+          </span>
+        )}
       </div>
 
       <div className="mission-card-meta">
@@ -34,49 +89,102 @@ function MissionCard({ mission }) {
           <span className="mission-card-label">Assigned Route</span>
           <span>{displayRoute}</span>
         </div>
+
         <div className="mission-card-line">
           <span className="mission-card-label">Requirement</span>
-          <span>{displayRequirement}</span>
+          {isEditing ? (
+            <input
+              type="text"
+              name="requirement"
+              className="edit-input"
+              value={editForm.requirement}
+              onChange={handleChange}
+            />
+          ) : (
+            <span>{editForm.requirement}</span>
+          )}
         </div>
+
         <div className="mission-card-line">
           <span className="mission-card-label">Date Range</span>
-          <span>{displayDate}</span>
+          {isEditing ? (
+            <input
+              type="text"
+              name="date_range"
+              className="edit-input"
+              value={editForm.date_range}
+              onChange={handleChange}
+            />
+          ) : (
+            <span>{editForm.date_range}</span>
+          )}
         </div>
+
         <div className="mission-card-line">
           <span className="mission-card-label">XP Reward</span>
-          <span>{displayReward}</span>
+          {isEditing ? (
+            <input
+              type="number"
+              name="xp_reward"
+              className="edit-input"
+              value={editForm.xp_reward}
+              onChange={handleChange}
+            />
+          ) : (
+            <span>+{Number(editForm.xp_reward).toLocaleString()} XP</span>
+          )}
         </div>
       </div>
 
       <div className="mission-card-actions">
-        <button type="button" className="mission-button secondary">
-          Edit
-        </button>
-        <button type="button" className="mission-button primary">
-          View Details
-        </button>
+        {isEditing ? (
+          <>
+            <button
+              type="button"
+              className="mission-button secondary"
+              onClick={() => setIsEditing(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="mission-button primary"
+              onClick={handleSave}
+            >
+              Save
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="mission-button secondary"
+              onClick={() => setIsEditing(true)}
+            >
+              Edit
+            </button>
+            <button type="button" className="mission-button primary">
+              View Details
+            </button>
+          </>
+        )}
       </div>
     </article>
   );
 }
 
 function MissionPage() {
-  // 1. Core State Hooks
   const [missions, setMissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // 2. Filter & Search UI State Hooks
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Active");
 
-  // 3. Fetch data from XAMPP local PHP server on mount
-  useEffect(() => {
+  const fetchMissions = () => {
     fetch("http://localhost/EcoQuest/api/index.php?endpoint=missions")
       .then((response) => {
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error("Failed to communicate with local PHP server.");
-        }
         return response.json();
       })
       .then((data) => {
@@ -84,26 +192,25 @@ function MissionPage() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Database connection error:", err);
         setError(err.message);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchMissions();
   }, []);
 
-  // 4. Client-Side Interactive Filtering Matrix
   const filteredMissions = missions.filter((mission) => {
     const title = mission.title || "";
     const routeName = mission.assigned_route || "";
-    const currentStatus = mission.status || "Active"; // fallback default matching your UI screenshots
+    const currentStatus = mission.status || "Active";
 
-    // Step A: Evaluate Search Criteria (Matches Title OR Joined Route Name)
     const matchesSearch =
       title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       routeName.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
-
-    // Step B: Evaluate Pill Filter Status Condition
     return currentStatus.toLowerCase() === activeFilter.toLowerCase();
   });
 
@@ -137,14 +244,12 @@ function MissionPage() {
         </div>
       </section>
 
-      {/* Handling Loading state wrappers, Server errors, or Empty Database States cleanly */}
       <section className="mission-grid" aria-label="Mission cards">
         {loading && (
           <p style={{ gridColumn: "1 / -1", padding: "20px" }}>
-            Loading missions from ecoquest schema...
+            Loading missions...
           </p>
         )}
-
         {error && (
           <p style={{ gridColumn: "1 / -1", padding: "20px", color: "red" }}>
             Error: {error}
@@ -166,7 +271,11 @@ function MissionPage() {
         {!loading &&
           !error &&
           filteredMissions.map((mission) => (
-            <MissionCard key={mission.id || mission.title} mission={mission} />
+            <MissionCard
+              key={mission.id || mission.title}
+              mission={mission}
+              onSaveSuccess={fetchMissions}
+            />
           ))}
       </section>
     </section>

@@ -9,24 +9,48 @@ class MissionController
         $this->db = $databaseConnection;
     }
 
-    // Fetch ALL missions with joined route details for the dashboard cards
     public function getAllMissions()
     {
-        // Replaced 'Active' AS status with the actual m.status column
+        // Now selecting m.date_range directly from the database table
         $query = "SELECT 
-                m.id, 
-                m.title, 
-                m.description AS requirement, 
-                m.points_reward AS xp_reward,
-                m.status, 
-                'Oct 12 - Oct 14' AS date_range, 
-                r.name AS assigned_route
-              FROM " . $this->table . " m
-              LEFT JOIN routes r ON m.route_id = r.id
-              ORDER BY m.id DESC";
+                    m.id, 
+                    m.title, 
+                    m.description AS requirement, 
+                    m.points_reward AS xp_reward,
+                    m.status, 
+                    m.date_range, 
+                    r.name AS assigned_route
+                  FROM " . $this->table . " m
+                  LEFT JOIN routes r ON m.route_id = r.id
+                  ORDER BY m.id DESC";
 
         $stmt = $this->db->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function updateMission($id, $data)
+    {
+        $query = "UPDATE " . $this->table . " 
+                  SET title = :title, 
+                      description = :requirement, 
+                      points_reward = :xp_reward, 
+                      status = :status, 
+                      date_range = :date_range 
+                  WHERE id = :id";
+
+        $stmt = $this->db->prepare($query);
+
+        $stmt->bindParam(':title', $data['title']);
+        $stmt->bindParam(':requirement', $data['requirement']);
+        $stmt->bindParam(':xp_reward', $data['xp_reward'], PDO::PARAM_INT);
+        $stmt->bindParam(':status', $data['status']);
+        $stmt->bindParam(':date_range', $data['date_range']);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+        if ($stmt->execute()) {
+            return ["success" => true, "message" => "Mission updated successfully."];
+        }
+        return ["success" => false, "message" => "Failed to update mission."];
     }
 }

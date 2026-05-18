@@ -112,6 +112,27 @@ elseif ($endpoint === 'missions') {
             }
             break;
 
+        case 'PUT':
+            $rawData = file_get_contents("php://input");
+            $data = json_decode($rawData, true);
+
+            // Guard rails: Check for valid payload details
+            if ($id === null) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Bad Request: Missing mission ID query parameter."]);
+                break;
+            }
+
+            if (!$data) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Bad Request: Missing or malformed JSON body payload."]);
+                break;
+            }
+
+            // Calls your newly configured method in MissionController.php
+            echo json_encode($missionController->updateMission($id, $data));
+            break;
+
         default:
             http_response_code(405);
             echo json_encode(["message" => "Method Not Allowed"]);

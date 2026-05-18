@@ -1,5 +1,5 @@
 :root {
-  --app-font: 'Segoe UI Variable', 'Trebuchet MS', 'Helvetica Neue', sans-serif;
+  --app-font: "Segoe UI Variable", "Trebuchet MS", "Helvetica Neue", sans-serif;
   font-family: var(--app-font);
   line-height: 1.5;
   font-weight: 400;

@@ -1,52 +1,52 @@
-import Header from '../components/Header'
+import Header from "../components/Header";
 
 const routeCards = [
   {
-    status: 'Active',
-    statusTone: 'active',
-    title: 'Rizal Park Loop',
-    difficulty: 'Easy',
-    location: 'Manila, NCR',
+    status: "Active",
+    statusTone: "active",
+    title: "Rizal Park Loop",
+    difficulty: "Easy",
+    location: "Manila, NCR",
     stats: [
-      { label: 'Distance', value: '1.2 km' },
-      { label: 'Est. Time', value: '18 min' },
-      { label: 'Trash Spots', value: '3' },
+      { label: "Distance", value: "1.2 km" },
+      { label: "Est. Time", value: "18 min" },
+      { label: "Trash Spots", value: "3" },
     ],
-    badge: '24',
-    action: 'Manage Route',
-    previewTone: 'forest',
+    badge: "24",
+    action: "Manage Route",
+    previewTone: "forest",
   },
   {
-    status: 'Active',
-    statusTone: 'active',
-    title: 'BGC High Street',
-    difficulty: 'Medium',
-    location: 'Taguig, NCR',
+    status: "Active",
+    statusTone: "active",
+    title: "BGC High Street",
+    difficulty: "Medium",
+    location: "Taguig, NCR",
     stats: [
-      { label: 'Distance', value: '3.5 km' },
-      { label: 'Est. Time', value: '45 min' },
-      { label: 'Trash Spots', value: '8' },
+      { label: "Distance", value: "3.5 km" },
+      { label: "Est. Time", value: "45 min" },
+      { label: "Trash Spots", value: "8" },
     ],
-    badge: '156',
-    action: 'Manage Route',
-    previewTone: 'ink',
+    badge: "156",
+    action: "Manage Route",
+    previewTone: "ink",
   },
   {
-    status: 'Draft',
-    statusTone: 'draft',
-    title: 'UP Diliman Oval',
-    difficulty: 'Medium',
-    location: 'Quezon City, NCR',
+    status: "Draft",
+    statusTone: "draft",
+    title: "UP Diliman Oval",
+    difficulty: "Medium",
+    location: "Quezon City, NCR",
     stats: [
-      { label: 'Distance', value: '2.2 km' },
-      { label: 'Est. Time', value: '30 min' },
-      { label: 'Trash Spots', value: 'TBD' },
+      { label: "Distance", value: "2.2 km" },
+      { label: "Est. Time", value: "30 min" },
+      { label: "Trash Spots", value: "TBD" },
     ],
-    badge: '0',
-    action: 'Continue Editing',
-    previewTone: 'sky',
+    badge: "0",
+    action: "Continue Editing",
+    previewTone: "sky",
   },
-]
+];
 
 function RoutePreview({ tone }) {
   return (
@@ -59,7 +59,7 @@ function RoutePreview({ tone }) {
         <div className="route-preview-dot two" />
       </div>
     </div>
-  )
+  );
 }
 
 function RouteCard({ card }) {
@@ -67,7 +67,9 @@ function RouteCard({ card }) {
     <article className="route-card">
       <div className="route-card-media">
         <RoutePreview tone={card.previewTone} />
-        <span className={`route-status route-status-${card.statusTone}`}>{card.status}</span>
+        <span className={`route-status route-status-${card.statusTone}`}>
+          {card.status}
+        </span>
       </div>
 
       <div className="route-card-body">
@@ -90,13 +92,16 @@ function RouteCard({ card }) {
           <div className="route-badge">
             <span>{card.badge}</span>
           </div>
-          <button type="button" className={`route-action${card.action === 'Continue Editing' ? ' solid' : ''}`}>
+          <button
+            type="button"
+            className={`route-action${card.action === "Continue Editing" ? " solid" : ""}`}
+          >
             {card.action}
           </button>
         </div>
       </div>
     </article>
-  )
+  );
 }
 
 function RoutePage() {
@@ -106,11 +111,11 @@ function RoutePage() {
         title="Route Management"
         subtitle="Manage and monitor active walking routes for eco-missions."
         searchPlaceholder="Search routes, locations, or status..."
-        actions={(
+        actions={
           <button type="button" className="filled-action route-create-button">
             Create New Route
           </button>
-        )}
+        }
       />
 
       <section className="route-toolbar" aria-label="Route filters">
@@ -138,7 +143,7 @@ function RoutePage() {
         ))}
       </section>
     </section>
-  )
+  );
 }
 
-export default RoutePage
+export default RoutePage;

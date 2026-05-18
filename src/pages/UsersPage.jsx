@@ -35,7 +35,7 @@ function UsersPage() {
 
   // 3. Helper Functions for Dynamic UI Data mapping
   const getInitials = (username) => {
-    if (!username) return "UQ";
+    if (!username) return "EQ";
     return username
       .split(" ")
       .map((word) => word[0])
@@ -45,25 +45,32 @@ function UsersPage() {
   };
 
   const calculateLevel = (points) => {
-    // Basic progression logic: 1 level per 1,000 points
-    return Math.floor(points / 1000) + 1;
+    const numericPoints = Number(points) || 0;
+    // Progression logic: 1 level per 1,000 points
+    return Math.floor(numericPoints / 1000) + 1;
   };
 
   // 4. Dynamic Client-Side Filtering and Searching
   const filteredUsers = users.filter((user) => {
+    // Null safety fallback values to avoid application crashes
+    const username = user.username || "";
+    const email = user.email || "";
+    const role = user.role || "User";
+    const isBanned =
+      user.is_banned === 1 ||
+      user.is_banned === "1" ||
+      user.status === "Banned";
+
     // Search filter logic (matches Username or Email matches)
     const matchesSearch =
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
-
-    // Pill filter logic (using structural defaults matching your schema fields if present)
-    const role = user.role || "User";
-    const isBanned = user.is_banned === 1 || user.status === "Banned";
+      username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      email.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
+    // Pill filter logic
     if (activeFilter === "Admins Only") {
-      return role === "Admin";
+      return role.toLowerCase() === "admin";
     }
     if (activeFilter === "Banned") {
       return isBanned;
@@ -77,7 +84,6 @@ function UsersPage() {
         title="User Management"
         subtitle="View, filter, and manage EcoQuest community members."
         searchPlaceholder="Search users..."
-        // Connect the search input to local state changes
         onSearchChange={(e) => setSearchQuery(e.target.value)}
         searchValue={searchQuery}
         actions={
@@ -165,7 +171,9 @@ function UsersPage() {
               ) : (
                 filteredUsers.map((user) => {
                   const isBanned =
-                    user.is_banned === 1 || user.status === "Banned";
+                    user.is_banned === 1 ||
+                    user.is_banned === "1" ||
+                    user.status === "Banned";
                   return (
                     <tr key={user.id || user.email}>
                       <td>
@@ -175,8 +183,8 @@ function UsersPage() {
                       </td>
                       <td>
                         <div className="user-identity">
-                          <strong>{user.username}</strong>
-                          <span>{user.email}</span>
+                          <strong>{user.username || "Unknown User"}</strong>
+                          <span>{user.email || "No Email Provided"}</span>
                         </div>
                       </td>
                       <td>
@@ -184,7 +192,7 @@ function UsersPage() {
                       </td>
                       <td>Lvl {calculateLevel(user.points)}</td>
                       <td className="xp-cell">
-                        {Number(user.points).toLocaleString()} pts
+                        {Number(user.points || 0).toLocaleString()} pts
                       </td>
                       <td>
                         <span

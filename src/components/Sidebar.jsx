@@ -50,7 +50,7 @@ function Icon({ name }) {
   }
 }
 
-function Sidebar({ activeSection, onNavigate }) {
+function Sidebar({ activeSection, onNavigate, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="brand-block">
@@ -78,7 +78,7 @@ function Sidebar({ activeSection, onNavigate }) {
       </nav>
 
       <div className="sidebar-footer">
-        <button type="button" className="utility-link">
+        <button type="button" className="utility-link" onClick={() => onLogout && onLogout()}>
           <span className="nav-icon small">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M10 17.25 15.25 12 10 6.75l1.41-1.41L18.06 12l-6.65 6.66L10 17.25ZM6 5h2v14H6z" />

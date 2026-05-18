@@ -2,72 +2,179 @@
 
 class UserController
 {
-    private $conn;
+    private $db;
+    private $uploadDir = __DIR__ . '/../../public/users/';
 
     public function __construct($dbConnection)
     {
-        $this->conn = $dbConnection;
+        $this->db = $dbConnection;
     }
 
-    // 1. Update this method to grab all users along with role and status
+    /**
+     * Helper to process profile image uploads securely
+     */
+    private function handleUserImageUpload()
+    {
+        if (isset($_FILES['image_file']) && $_FILES['image_file']['error'] === UPLOAD_ERR_OK) {
+            if (!is_dir($this->uploadDir)) {
+                mkdir($this->uploadDir, 0777, true);
+            }
+
+            $fileExtension = pathinfo($_FILES['image_file']['name'], PATHINFO_EXTENSION);
+            // Generates a random unguessable unique string to prevent naming conflicts
+            $newFileName = uniqid('user_', true) . '.' . $fileExtension;
+            $targetFilePath = $this->uploadDir . $newFileName;
+
+            if (move_uploaded_file($_FILES['image_file']['tmp_name'], $targetFilePath)) {
+                return $newFileName;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * FETCH ALL USERS (GET)
+     * Directly echoes response internally to match your api/index.php structure
+     */
     public function getAllUsers()
     {
         try {
-            // Added role and status to the SELECT statement
-            $query = "SELECT id, username, email, role, status, points, created_at FROM users ORDER BY points DESC";
-            $stmt = $this->conn->prepare($query);
+            $query = "SELECT id, username, email, role, status, points, image_url, created_at FROM users ORDER BY id DESC";
+            $stmt = $this->db->prepare($query);
             $stmt->execute();
 
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Cast native variable types properly
+            foreach ($users as &$user) {
+                $user['id'] = (int) $user['id'];
+                $user['points'] = (int) $user['points'];
+            }
+
+            http_response_code(200);
+            echo json_encode($users);
         } catch (PDOException $e) {
-            return ["error" => "Failed to fetch users: " . $e->getMessage()];
+            http_response_code(500);
+            echo json_encode(["success" => false, "message" => "Database fetch error: " . $e->getMessage()]);
         }
     }
 
-    // 2. Update this method for single-user view details if needed
+    /**
+     * GET SINGLE USER PROFILE (GET with ?id=x)
+     */
     public function getUserProfile($id)
     {
         try {
-            // Added role and status here as well
-            $query = "SELECT id, username, email, role, status, points, created_at FROM users WHERE id = :id LIMIT 1";
-            $stmt = $this->conn->prepare($query);
+            $query = "SELECT id, username, email, role, status, points, image_url FROM users WHERE id = :id LIMIT 1";
+            $stmt = $this->db->prepare($query);
             $stmt->bindParam(':id', $id, PDO::PARAM_INT);
             $stmt->execute();
 
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            return $user ? $user : ["message" => "User not found."];
+            if ($user) {
+                $user['id'] = (int) $user['id'];
+                $user['points'] = (int) $user['points'];
+                return $user; // Returns structure matching wrapper in api/index.php
+            }
+
+            http_response_code(404);
+            return ["success" => false, "message" => "User account matching tracking values not found."];
         } catch (PDOException $e) {
-            return ["error" => "Database error: " . $e->getMessage()];
+            return ["success" => false, "message" => $e->getMessage()];
         }
     }
-    // 4. Update an existing user's details (PUT)
-    // 4. Update an existing user's details safely (PUT)
-    public function updateUser($id, $data)
+
+    /**
+     * ADD / REGISTER NEW USER (POST)
+     */
+    public function addUser()
     {
-        if (empty($id)) {
-            return ["success" => false, "message" => "Missing user ID for update."];
-        }
-
         try {
-            $query = "UPDATE users 
-                      SET username = :username, 
-                          email = :email, 
-                          role = :role, 
-                          status = :status, 
-                          points = :points 
-                      WHERE id = :id";
+            if (empty($_POST['username']) || empty($_POST['email']) || empty($_POST['password'])) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Missing required fields (username, email, or password)."]);
+                return;
+            }
 
-            $stmt = $this->conn->prepare($query);
+            $username = strip_tags($_POST['username']);
+            $email = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL);
+            $password_hash = password_hash($_POST['password'], PASSWORD_BCRYPT);
+            $role = !empty($_POST['role']) ? $_POST['role'] : 'User';
+            $status = !empty($_POST['status']) ? $_POST['status'] : 'Active';
+            $points = isset($_POST['points']) ? (int) $_POST['points'] : 0;
 
-            // 🛠️ FIX: Assign raw values to variables with safe fallbacks first.
-            // This prevents PHP Notices if keys are missing from the incoming request payload.
-            $username = $data['username'] ?? '';
-            $email = $data['email'] ?? '';
-            $role = $data['role'] ?? 'User';
-            $status = $data['status'] ?? 'Active';
-            $points = isset($data['points']) ? (int) $data['points'] : 0;
+            if (!$email) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Invalid email validation format parameters."]);
+                return;
+            }
 
-            // Bind parameters securely using the safe local variables
+            // Check file upload or fallback to standard placeholder string values
+            $uploadedFile = $this->handleUserImageUpload();
+            $image_url = $uploadedFile ? $uploadedFile : (!empty($_POST['image_url']) ? $_POST['image_url'] : 'default-user.png');
+
+            $query = "INSERT INTO users (username, email, password_hash, role, status, points, image_url) 
+                      VALUES (:username, :email, :password_hash, :role, :status, :points, :image_url)";
+
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':username', $username);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':password_hash', $password_hash);
+            $stmt->bindParam(':role', $role);
+            $stmt->bindParam(':status', $status);
+            $stmt->bindParam(':points', $points, PDO::PARAM_INT);
+            $stmt->bindParam(':image_url', $image_url);
+
+            if ($stmt->execute()) {
+                http_response_code(201);
+                echo json_encode(["success" => true, "message" => "User account registered successfully."]);
+            } else {
+                http_response_code(500);
+                echo json_encode(["success" => false, "message" => "Failed to write user row metrics."]);
+            }
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["success" => false, "message" => "Server error: " . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * UPDATE EXISTING USER ACCOUNT DETAILS (POST with id redirect fallback)
+     */
+    public function updateUser($id)
+    {
+        try {
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Missing core identification variable reference query key."]);
+                return;
+            }
+
+            $username = strip_tags($_POST['username']);
+            $email = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL);
+            $role = $_POST['role'];
+            $status = $_POST['status'];
+            $points = (int) $_POST['points'];
+
+            $uploadedFile = $this->handleUserImageUpload();
+
+            // Form dynamic sql query based on whether we are overwriting the profile image file field mapping values
+            if ($uploadedFile) {
+                $query = "UPDATE users SET username = :username, email = :email, role = :role, status = :status, points = :points, image_url = :image_url WHERE id = :id";
+            } else {
+                $query = "UPDATE users SET username = :username, email = :email, role = :role, status = :status, points = :points WHERE id = :id";
+            }
+
+            // Optional branch check execution if password payload modification values are supplied
+            if (!empty($_POST['password'])) {
+                if ($uploadedFile) {
+                    $query = "UPDATE users SET username = :username, email = :email, password_hash = :password_hash, role = :role, status = :status, points = :points, image_url = :image_url WHERE id = :id";
+                } else {
+                    $query = "UPDATE users SET username = :username, email = :email, password_hash = :password_hash, role = :role, status = :status, points = :points WHERE id = :id";
+                }
+            }
+
+            $stmt = $this->db->prepare($query);
             $stmt->bindParam(':username', $username);
             $stmt->bindParam(':email', $email);
             $stmt->bindParam(':role', $role);
@@ -75,61 +182,44 @@ class UserController
             $stmt->bindParam(':points', $points, PDO::PARAM_INT);
             $stmt->bindParam(':id', $id, PDO::PARAM_INT);
 
-            if ($stmt->execute()) {
-                return ["success" => true, "message" => "User updated successfully."];
+            if (!empty($_POST['password'])) {
+                $newHash = password_hash($_POST['password'], PASSWORD_BCRYPT);
+                $stmt->bindParam(':password_hash', $newHash);
             }
-            return ["success" => false, "message" => "No rows were updated or execution failed."];
-        } catch (PDOException $e) {
-            return ["success" => false, "message" => "Database error: " . $e->getMessage()];
+
+            if ($uploadedFile) {
+                $stmt->bindParam(':image_url', $uploadedFile);
+            }
+
+            if ($stmt->execute()) {
+                http_response_code(200);
+                echo json_encode(["success" => true, "message" => "User account updated successfully."]);
+            } else {
+                http_response_code(500);
+                echo json_encode(["success" => false, "message" => "Failed to execute changes on target database record rows."]);
+            }
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode(["success" => false, "message" => "System execution error: " . $e->getMessage()]);
         }
     }
 
-    // 5. Delete a user from the system (DELETE)
+    /**
+     * DELETE EXISTING USER ACCOUNT RECORD
+     */
     public function deleteUser($id)
     {
-        if (empty($id)) {
-            return ["success" => false, "message" => "Missing user ID for deletion."];
-        }
-
         try {
             $query = "DELETE FROM users WHERE id = :id";
-            $stmt = $this->conn->prepare($query);
+            $stmt = $this->db->prepare($query);
             $stmt->bindParam(':id', $id, PDO::PARAM_INT);
 
             if ($stmt->execute()) {
-                return ["success" => true, "message" => "User deleted successfully."];
+                return ["success" => true, "message" => "User record completely eradicated."];
             }
-            return ["success" => false, "message" => "Failed to delete user."];
+            return ["success" => false, "message" => "Failed to purge database row data values."];
         } catch (PDOException $e) {
-            return ["success" => false, "message" => "Database error: " . $e->getMessage()];
-        }
-    }
-
-    // 3. Update registration default assignments if you handle signups here
-    public function registerUser($data)
-    {
-        if (empty($data['username']) || empty($data['email']) || empty($data['password'])) {
-            return ["success" => false, "message" => "Incomplete form details."];
-        }
-
-        try {
-            // Explicitly set default state fields on creation if desired
-            $query = "INSERT INTO users (username, email, password_hash, role, status, points) 
-                      VALUES (:username, :email, :password_hash, 'User', 'Active', 0)";
-
-            $stmt = $this->conn->prepare($query);
-            $hashedPassword = password_hash($data['password'], PASSWORD_BCRYPT);
-
-            $stmt->bindParam(':username', $data['username']);
-            $stmt->bindParam(':email', $data['email']);
-            $stmt->bindParam(':password_hash', $hashedPassword);
-
-            if ($stmt->execute()) {
-                return ["success" => true, "message" => "User registered successfully."];
-            }
-            return ["success" => false, "message" => "Registration execution failed."];
-        } catch (PDOException $e) {
-            return ["success" => false, "message" => "Database error: " . $e->getMessage()];
+            return ["success" => false, "message" => $e->getMessage()];
         }
     }
 }

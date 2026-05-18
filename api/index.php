@@ -45,18 +45,26 @@ if ($endpoint === 'users') {
     switch ($method) {
         case 'GET':
             if ($id !== null) {
+                // If your controller returns array structures, wrap it. 
+                // If it internal-echoes, use: $userController->getUserProfile($id);
                 echo json_encode($userController->getUserProfile($id));
             } else {
-                echo json_encode($userController->getAllUsers());
+                // FIXED: Removed the double echo json_encode nesting wrapping block
+                $userController->getAllUsers();
             }
             break;
 
         case 'POST':
-            $data = json_decode(file_get_contents("php://input"), true);
-            echo json_encode($userController->registerUser($data));
+            if ($id !== null) {
+                // ROUTING FIX: Handle multipart profile updates securely using POST with an id query
+                $userController->updateUser($id);
+            } else {
+                $userController->addUser();
+            }
             break;
 
         case 'PUT':
+            // Fallback for tools executing JSON body requests without multipart forms
             $rawData = file_get_contents("php://input");
             $data = json_decode($rawData, true);
 
@@ -65,14 +73,7 @@ if ($endpoint === 'users') {
                 echo json_encode(["success" => false, "message" => "Bad Request: Missing user ID query parameter."]);
                 break;
             }
-
-            if (!$data) {
-                http_response_code(400);
-                echo json_encode(["success" => false, "message" => "Bad Request: Missing or malformed JSON body payload."]);
-                break;
-            }
-
-            echo json_encode($userController->updateUser($id, $data));
+            $userController->updateUser($id);
             break;
 
         case 'DELETE':
@@ -185,7 +186,7 @@ elseif ($endpoint === 'routes') {
             break;
     }
 }
-// 🎁 Gateway Router Logic Array for Rewards Endpoint (Fixed Context Errors)
+// 🎁 Gateway Router Logic Array for Rewards Endpoint
 else if ($endpoint === 'rewards') {
     switch ($method) {
         case 'GET':
@@ -193,7 +194,11 @@ else if ($endpoint === 'rewards') {
             break;
 
         case 'POST':
-            $rewardController->createReward();
+            if ($id !== null) {
+                $rewardController->updateReward($id);
+            } else {
+                $rewardController->createReward();
+            }
             break;
 
         case 'PUT':

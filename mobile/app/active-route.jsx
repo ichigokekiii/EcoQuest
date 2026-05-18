@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { spacing, radius } from '../src/constants/theme';
 import { getRouteById } from '../src/services/api';
 
 const { height, width } = Dimensions.get('window');
+
+const GOOGLE_DIRECTIONS_APIKEY =
+  process.env.EXPO_PUBLIC_GOOGLE_DIRECTIONS_API_KEY ||
+  (Platform.OS === 'ios'
+    ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY
+    : process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY);
 
 const SNAP_TOP = 0;
 const SNAP_BOTTOM = 220; // Increased to ensure the inner buttons are pushed off-screen and lower the card slightly
@@ -36,6 +43,7 @@ export default function ActiveRouteScreen() {
 
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [routeCoordinates, setRouteCoordinates] = useState([]);
 
   // Reanimated Bottom Sheet State
   const translateY = useSharedValue(0);
@@ -107,14 +115,37 @@ export default function ActiveRouteScreen() {
         showsCompass={false}
         showsUserLocation={false}
       >
-        <Polyline
-          coordinates={route.coordinates}
-          strokeColor="#16A34A"
-          strokeWidth={4}
-          lineDashPattern={[5, 5]}
-          lineCap="round"
-          lineJoin="round"
-        />
+        {GOOGLE_DIRECTIONS_APIKEY && route.coordinates?.length >= 2 ? (
+          <>
+            <MapViewDirections
+              origin={route.coordinates[0]}
+              destination={route.coordinates[route.coordinates.length - 1]}
+              waypoints={route.coordinates.length > 2 ? route.coordinates.slice(1, -1) : []}
+              apikey={GOOGLE_DIRECTIONS_APIKEY}
+              strokeWidth={7}
+              strokeColor="#15803d"
+              onReady={(result) => setRouteCoordinates(result.coordinates)}
+              mode="WALKING"
+            />
+            {routeCoordinates.length > 0 && (
+              <Polyline
+                coordinates={routeCoordinates}
+                strokeColor="#4ade80"
+                strokeWidth={4}
+                lineCap="round"
+                lineJoin="round"
+              />
+            )}
+          </>
+        ) : (
+          <Polyline
+            coordinates={route.coordinates}
+            strokeColor="#16A34A"
+            strokeWidth={5}
+            lineCap="round"
+            lineJoin="round"
+          />
+        )}
 
         {/* Mock User Location Marker */}
         {route.coordinates.length > 0 && (

@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
 import { colors, spacing, radius } from '../src/constants/theme';
 import Card from '../src/components/Card';
 import { getRouteById, startRouteSession } from '../src/services/api';
 
 const { width, height } = Dimensions.get('window');
+
+const GOOGLE_DIRECTIONS_APIKEY =
+  process.env.EXPO_PUBLIC_GOOGLE_DIRECTIONS_API_KEY ||
+  (Platform.OS === 'ios'
+    ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY
+    : process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY);
 
 function getDifficultyLabel(difficulty) {
   if (!difficulty) return 'Easy';
@@ -37,6 +44,7 @@ export default function RouteDetailsScreen() {
 
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -75,14 +83,37 @@ export default function RouteDetailsScreen() {
           scrollEnabled={true}
           zoomEnabled={true}
         >
+        {GOOGLE_DIRECTIONS_APIKEY && route.coordinates?.length >= 2 ? (
+          <>
+            <MapViewDirections
+              origin={route.coordinates[0]}
+              destination={route.coordinates[route.coordinates.length - 1]}
+              waypoints={route.coordinates.length > 2 ? route.coordinates.slice(1, -1) : []}
+              apikey={GOOGLE_DIRECTIONS_APIKEY}
+              strokeWidth={7}
+              strokeColor="#15803d"
+              onReady={(result) => setRouteCoordinates(result.coordinates)}
+              mode="WALKING"
+            />
+            {routeCoordinates.length > 0 && (
+              <Polyline
+                coordinates={routeCoordinates}
+                strokeColor="#22c55e"
+                strokeWidth={4}
+                lineCap="round"
+                lineJoin="round"
+              />
+            )}
+          </>
+        ) : (
           <Polyline
             coordinates={route.coordinates}
             strokeColor="#16A34A"
-            strokeWidth={4}
-            lineDashPattern={[5, 5]}
+            strokeWidth={5}
             lineCap="round"
             lineJoin="round"
           />
+        )}
           {route.markers.map(marker => (
             <Marker key={marker.id} coordinate={marker.coordinate}>
               <View style={marker.type === 'start' ? styles.startMarker : marker.type === 'checkpoint' ? styles.checkpointMarker : styles.endMarker} />
@@ -101,14 +132,6 @@ export default function RouteDetailsScreen() {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
-
-        {/* Floating Badges */}
-        <View style={[styles.easyBadge, getDifficultyLabel(route.difficulty) === 'Medium' && styles.mediumBadge, getDifficultyLabel(route.difficulty) === 'Hard' && styles.hardBadge]}>
-          <Text style={[styles.easyBadgeText, getDifficultyLabel(route.difficulty) === 'Medium' && styles.mediumBadgeText, getDifficultyLabel(route.difficulty) === 'Hard' && styles.hardBadgeText]}>{getDifficultyLabel(route.difficulty)}</Text>
-        </View>
-        <View style={styles.distanceBadge}>
-          <Text style={styles.distanceBadgeText}>{route.distance}</Text>
-        </View>
       </View>
 
       {/* Bottom Sheet Content */}

@@ -20,7 +20,7 @@ export default function RouteCompleteScreen() {
         <View style={styles.glowRingOuter}>
           <View style={styles.glowRingInner}>
             <View style={styles.checkCircle}>
-              <Feather name="check" size={32} color="#FFFFFF" />
+              <Feather name="check" size={32} color="#16A34A" />
             </View>
           </View>
         </View>
@@ -123,17 +123,18 @@ export default function RouteCompleteScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#166534', // Dark green matching mockup
+    backgroundColor: '#16A34A', // Match primary green
   },
   heroSection: {
     alignItems: 'center',
-    paddingBottom: spacing['2xl'],
+    paddingTop: spacing['3xl'],
+    paddingBottom: spacing['3xl'],
   },
   glowRingOuter: {
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xl,
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -150,9 +151,14 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#22C55E', // Solid green check background
+    backgroundColor: '#FFFFFF', // White check background
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
   heroTitle: {
     fontSize: 32,
@@ -167,25 +173,34 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     flex: 1,
-    backgroundColor: '#F9FAFB', // Off-white
-    borderTopLeftRadius: radius['2xl'],
-    borderTopRightRadius: radius['2xl'],
+    backgroundColor: '#FFFFFF', // Clean white background like other pages
+    borderTopLeftRadius: radius['3xl'],
+    borderTopRightRadius: radius['3xl'],
     overflow: 'hidden',
+    marginTop: -24, // Pull up to overlap hero
   },
   scrollContent: {
-    padding: spacing.lg,
+    padding: spacing.xl,
+    paddingTop: spacing['2xl'],
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   statCard: {
     flex: 1,
-    marginHorizontal: 4,
+    marginHorizontal: 6,
     alignItems: 'center',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   statIcon: {
     marginBottom: spacing.sm,
@@ -276,18 +291,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6', // Using simple border matching mockup aesthetics for this specific footer
+    borderTopColor: '#F3F4F6', 
   },
   primaryButton: {
-    backgroundColor: '#166534', // Dark green matching hero
+    backgroundColor: '#16A34A', // Primary green
     paddingVertical: 18,
     borderRadius: 16,
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   primaryButtonText: {
     color: '#FFFFFF',

@@ -18,10 +18,9 @@ error_reporting(E_ALL);
 // Load required configs and controllers
 require_once './config/DatabaseConnection.php';
 require_once './controllers/UserController.php';
-require_once './controllers/MissionController.php'; // Added Mission Controller inclusion
+require_once './controllers/MissionController.php';
 require_once './controllers/RouteController.php';
-
-
+require_once './controllers/RewardsController.php';
 
 $database = new DatabaseConnection();
 $dbConn = $database->getConnection();
@@ -29,8 +28,8 @@ $dbConn = $database->getConnection();
 // Instantiate Controllers
 $userController = new UserController($dbConn);
 $routeController = new RouteController($dbConn);
-$missionController = new MissionController($dbConn); // Added Mission Controller instance
-
+$missionController = new MissionController($dbConn);
+$rewardController = new RewardsController($dbConn);
 
 $endpoint = $_GET['endpoint'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -91,27 +90,23 @@ if ($endpoint === 'users') {
             break;
     }
 }
-// 🛠️ Added Handler Block for the EcoQuest Missions Endpoint
+// 🛠️ Handler Block for the EcoQuest Missions Endpoint
 elseif ($endpoint === 'missions') {
     switch ($method) {
         case 'GET':
             if ($id !== null) {
-                // If you build a single mission lookup method later
                 if (method_exists($missionController, 'getMissionDetails')) {
                     echo json_encode($missionController->getMissionDetails($id));
                 } else {
                     echo json_encode(["message" => "Single mission view not implemented yet."]);
                 }
             } else {
-                // This calls your dynamic SQL statement that joins the routes table
                 echo json_encode($missionController->getAllMissions());
             }
             break;
 
         case 'POST':
             $data = json_decode(file_get_contents("php://input"), true);
-
-            // Call the newly created controller method safely
             echo json_encode($missionController->createMission($data));
             break;
 
@@ -119,7 +114,6 @@ elseif ($endpoint === 'missions') {
             $rawData = file_get_contents("php://input");
             $data = json_decode($rawData, true);
 
-            // Guard rails: Check for valid payload details
             if ($id === null) {
                 http_response_code(400);
                 echo json_encode(["success" => false, "message" => "Bad Request: Missing mission ID query parameter."]);
@@ -132,7 +126,6 @@ elseif ($endpoint === 'missions') {
                 break;
             }
 
-            // Calls your newly configured method in MissionController.php
             echo json_encode($missionController->updateMission($id, $data));
             break;
 
@@ -149,10 +142,9 @@ elseif ($endpoint === 'missions') {
             http_response_code(405);
             echo json_encode(["message" => "Method Not Allowed"]);
             break;
-
     }
-
-} // Inside index.php handling the endpoints array matrix
+}
+// Handler Block for EcoQuest Routes Endpoint
 elseif ($endpoint === 'routes') {
     switch ($method) {
         case 'GET':
@@ -190,6 +182,32 @@ elseif ($endpoint === 'routes') {
         default:
             http_response_code(405);
             echo json_encode(["message" => "Method Not Allowed"]);
+            break;
+    }
+}
+// 🎁 Gateway Router Logic Array for Rewards Endpoint (Fixed Context Errors)
+else if ($endpoint === 'rewards') {
+    switch ($method) {
+        case 'GET':
+            $rewardController->getAllRewards();
+            break;
+
+        case 'POST':
+            $rewardController->createReward();
+            break;
+
+        case 'PUT':
+            if ($id === null) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Bad Request: Missing reward ID parameter key."]);
+                break;
+            }
+            $rewardController->updateReward($id);
+            break;
+
+        default:
+            http_response_code(405);
+            echo json_encode(["message" => "HTTP Request Method handling not permitted."]);
             break;
     }
 } else {

@@ -3,10 +3,10 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web"
+    "start": "EXPO_UNSTABLE_BONJOUR=0 expo start",
+    "android": "EXPO_UNSTABLE_BONJOUR=0 expo run:android",
+    "ios": "EXPO_UNSTABLE_BONJOUR=0 expo run:ios",
+    "web": "EXPO_UNSTABLE_BONJOUR=0 expo start --web"
   },
   "dependencies": {
     "@react-navigation/bottom-tabs": "^7.15.5",

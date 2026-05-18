@@ -1,6 +1,8 @@
-# Welcome to your Expo app 👋
+# Eco Quest Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+User-facing Expo app for Eco Quest.
+
+This client lives in `mobile/` and talks to the shared Express backend in `backend/`.
 
 ## Get started
 

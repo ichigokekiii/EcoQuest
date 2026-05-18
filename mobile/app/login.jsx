@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import Input from '../src/components/Input';
 import Button from '../src/components/Button';
+import { auth } from '../src/services/firebase';
+import api from '../src/services/api';
 import { colors, spacing, radius } from '../src/constants/theme';
 
 export default function LoginScreen() {
@@ -14,12 +17,36 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (!email.trim() || !password) {
+      Alert.alert('Missing fields', 'Please enter your email and password.');
+      return;
+    }
+
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+      try {
+        await api.get('/users/me');
+      } catch (profileError) {
+        if (profileError.response?.status !== 404) {
+          throw profileError;
+        }
+
+        await api.post('/auth/sync-user', {
+          fullName: email.trim().split('@')[0],
+          email: email.trim(),
+        });
+      }
+
       router.replace('/(tabs)');
-    }, 1000);
+    } catch (error) {
+      console.log('Login error:', error);
+      Alert.alert('Login failed', error.response?.data?.message || error.message || 'Unable to sign in right now.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

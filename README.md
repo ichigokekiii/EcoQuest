@@ -118,7 +118,7 @@ eco-quest/
 │
 ├── mobile/
 ├── admin/
-├── server/
+├── backend/
 ├── docs/
 ├── README.md
 └── .gitignore
@@ -129,7 +129,7 @@ Folder purpose:
 ```txt
 mobile/   → React Native + Expo mobile app
 admin/    → Vite React desktop admin dashboard
-server/   → Express.js backend API
+backend/  → Shared Express.js backend API
 docs/     → Local project documentation and AI context files
 ```
 
@@ -351,7 +351,7 @@ Hard-to-explain code
 
 ```txt
 1. Create root folder structure
-2. Set up server/
+2. Set up backend/
 3. Set up Firebase project
 4. Connect Firebase Admin SDK
 5. Set up mobile/
@@ -375,7 +375,7 @@ Hard-to-explain code
 The project will usually run three apps during development:
 
 ```txt
-server/
+backend/
 mobile/
 admin/
 ```
@@ -383,7 +383,7 @@ admin/
 Example terminals:
 
 ```bash
-cd server
+cd backend
 npm run dev
 ```
 
@@ -404,7 +404,7 @@ npm run dev
 Each app should have its own environment file.
 
 ```txt
-server/.env
+backend/.env
 mobile/.env
 admin/.env
 ```
@@ -416,7 +416,7 @@ Never commit Firebase Admin SDK service account files.
 Firebase Admin SDK credentials must only be used inside:
 
 ```txt
-server/
+backend/
 ```
 
 They must never be placed inside:
@@ -449,10 +449,10 @@ The `docs/` folder contains local project context and AI planning files, so Mark
 ## Current Status
 
 ```txt
-Planning and documentation completed.
-Main docs simplified.
-Reference docs organized.
-Ready to start setup and coding.
+Shared backend structure established.
+Mobile app kept in mobile/.
+Desktop admin app scaffolded in admin/.
+Admin-only API routes grouped under /api/admin.
 ```
 
 ---

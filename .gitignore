@@ -9,13 +9,14 @@ node_modules/
 .env.production
 .env*.local
 *.env
+!.env.example
+!**/.env.example
 
 # Firebase service account keys and private credentials
 *serviceAccount*.json
 firebase-adminsdk*.json
 serviceAccountKey.json
 private-key.json
-app.json
 
 # Ignore all Markdown files inside docs folder
 docs/**/*.md
@@ -55,9 +56,9 @@ app-example
 admin/dist/
 admin/.vite/
 
-# Server logs and temporary files
-server/logs/
-server/*.log
+# Backend logs and temporary files
+backend/logs/
+backend/*.log
 logs/
 *.log
 

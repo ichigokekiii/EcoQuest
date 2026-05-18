@@ -1,12 +1,60 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import Input from '../src/components/Input';
 import Button from '../src/components/Button';
+import { auth } from '../src/services/firebase';
+import api from '../src/services/api';
 import { colors, spacing, radius } from '../src/constants/theme';
+
+function getPasswordStrength(password) {
+  const hasLetter = /[a-z]/i.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasCapital = /[A-Z]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+  if (!password) {
+    return {
+      bars: 0,
+      label: 'Weak',
+      color: '#E5E7EB',
+    };
+  }
+
+  if (hasLetter && hasNumber && hasCapital && hasSpecial) {
+    return {
+      bars: 4,
+      label: 'Strong',
+      color: '#16A34A',
+    };
+  }
+
+  if (hasLetter && hasNumber && hasCapital) {
+    return {
+      bars: 3,
+      label: 'Good',
+      color: '#22C55E',
+    };
+  }
+
+  if (hasLetter && hasNumber) {
+    return {
+      bars: 2,
+      label: 'Weak',
+      color: '#EAB308',
+    };
+  }
+
+  return {
+    bars: 1,
+    label: 'Weak',
+    color: '#EF4444',
+  };
+}
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -16,13 +64,44 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const passwordStrength = getPasswordStrength(password);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
+    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+      Alert.alert('Missing fields', 'Please complete all required fields.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Password mismatch', 'Your passwords do not match.');
+      return;
+    }
+
+    if (!termsAgreed) {
+      Alert.alert('Terms required', 'Please agree to the terms before creating an account.');
+      return;
+    }
+
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+
+    try {
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await api.post('/auth/sync-user', {
+        fullName: fullName.trim(),
+        email: email.trim(),
+      });
       router.replace('/(tabs)');
-    }, 1000);
+    } catch (error) {
+      console.log('Register error:', error);
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        'Unable to create your account right now.';
+
+      Alert.alert('Registration failed', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -82,11 +161,21 @@ export default function RegisterScreen() {
             />
             
             <View style={styles.passwordStrengthContainer}>
-              <View style={[styles.strengthBar, { backgroundColor: '#E5E7EB' }]} />
-              <View style={[styles.strengthBar, { backgroundColor: '#E5E7EB' }]} />
-              <View style={[styles.strengthBar, { backgroundColor: '#E5E7EB' }]} />
-              <View style={[styles.strengthBar, { backgroundColor: '#E5E7EB' }]} />
-              <Text style={styles.strengthText}>Weak</Text>
+              {[1, 2, 3, 4].map((bar) => (
+                <View
+                  key={bar}
+                  style={[
+                    styles.strengthBar,
+                    {
+                      backgroundColor:
+                        bar <= passwordStrength.bars ? passwordStrength.color : '#E5E7EB',
+                    },
+                  ]}
+                />
+              ))}
+              <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                {passwordStrength.label}
+              </Text>
             </View>
 
             <TouchableOpacity 

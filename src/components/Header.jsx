@@ -6,6 +6,7 @@ function Header({
   searchPlaceholder,
   onSearchChange, // Connected to parent state setter
   searchValue, // Binds state value
+  onExport,
   actions,
 }) {
   return (

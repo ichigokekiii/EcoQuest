@@ -10,16 +10,19 @@ function UsersPage() {
   // Interactive UI State
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("All Users");
-
   const filters = ["All Users", "Admins Only", "Banned"];
 
+  // CRUD Target Form States
+  const [editingUser, setEditingUser] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(null);
+
   // 2. Fetch data from XAMPP local server on mount
-  useEffect(() => {
+  const fetchUsers = () => {
+    setLoading(true);
     fetch("http://localhost/EcoQuest/api/index.php?endpoint=users")
       .then((response) => {
-        if (!response.ok) {
+        if (!response.ok)
           throw new Error("Failed to communicate with local PHP server.");
-        }
         return response.json();
       })
       .then((data) => {
@@ -31,9 +34,70 @@ function UsersPage() {
         setError(err.message);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchUsers();
   }, []);
 
-  // 3. Helper Functions for Dynamic UI Data mapping
+  // 3. Backend Mutation Handlers (Update & Delete)
+  const handleUpdateUser = (e) => {
+    e.preventDefault();
+
+    fetch(
+      `http://localhost/EcoQuest/api/index.php?endpoint=users&id=${editingUser.id}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: editingUser.username,
+          email: editingUser.email,
+          role: editingUser.role,
+          status: editingUser.status,
+          points: Number(editingUser.points),
+        }),
+      },
+    )
+      .then((res) => {
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          return res.text().then((text) => {
+            throw new Error(`Server returned raw HTML text: ${text}`);
+          });
+        }
+        return res.json();
+      })
+      .then(() => {
+        setEditingUser(null);
+        fetchUsers(); // Refresh data grid
+      })
+      .catch((err) => alert(`Update Failed: ${err.message}`));
+  };
+
+  const handleDeleteUser = () => {
+    fetch(
+      `http://localhost/EcoQuest/api/index.php?endpoint=users&id=${deletingUser.id}`,
+      {
+        method: "DELETE",
+      },
+    )
+      .then((res) => {
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          return res.text().then((text) => {
+            throw new Error(`Server returned raw text: ${text}`);
+          });
+        }
+        return res.json();
+      })
+      .then(() => {
+        setDeletingUser(null);
+        fetchUsers(); // Refresh data grid
+      })
+      .catch((err) => alert(`Delete Failed: ${err.message}`));
+  };
+
+  // 4. Helper Functions for Dynamic UI Data mapping
   const getInitials = (username) => {
     if (!username) return "EQ";
     return username
@@ -46,33 +110,61 @@ function UsersPage() {
 
   const calculateLevel = (points) => {
     const numericPoints = Number(points) || 0;
-    // Progression logic: 1 level per 1,000 points (Matches your UI screenshot!)
     return Math.floor(numericPoints / 1000) + 1;
   };
 
-  // 4. Dynamic Client-Side Filtering and Searching
+  const handleExportCSV = () => {
+    const headers = [
+      "ID",
+      "Username",
+      "Email",
+      "Role",
+      "Level",
+      "Points",
+      "Status",
+    ];
+    const csvRows = filteredUsers.map((user) => [
+      user.id,
+      `"${user.username.replace(/"/g, '""')}"`,
+      `"${user.email}"`,
+      user.role || "User",
+      calculateLevel(user.points),
+      user.points || 0,
+      user.status || "Active",
+    ]);
+    const csvContent = [
+      headers.join(","),
+      ...csvRows.map((row) => row.join(",")),
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `ecoquest_users_${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 5. Dynamic Client-Side Filtering and Searching
   const filteredUsers = users.filter((user) => {
-    // Exact structural matching to your updated database columns
     const username = user.username || "";
     const email = user.email || "";
     const role = user.role || "User";
     const status = user.status || "Active";
 
-    // Search filter logic (matches Username or Email)
     const matchesSearch =
       username.toLowerCase().includes(searchQuery.toLowerCase()) ||
       email.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
-    // Pill filter logic mapped precisely to the new columns
-    if (activeFilter === "Admins Only") {
-      return role.toLowerCase() === "admin";
-    }
-    if (activeFilter === "Banned") {
-      return status.toLowerCase() === "banned";
-    }
-    return true; // "All Users"
+    if (activeFilter === "Admins Only") return role.toLowerCase() === "admin";
+    if (activeFilter === "Banned") return status.toLowerCase() === "banned";
+    return true;
   });
 
   return (
@@ -85,7 +177,11 @@ function UsersPage() {
         searchValue={searchQuery}
         actions={
           <>
-            <button type="button" className="outline-action">
+            <button
+              type="button"
+              className="outline-action"
+              onClick={handleExportCSV}
+            >
               Export CSV
             </button>
             <button type="button" className="filled-action">
@@ -113,24 +209,6 @@ function UsersPage() {
           <span>
             Showing {filteredUsers.length} of {users.length} users
           </span>
-          <button
-            type="button"
-            className="icon-button nav-arrow"
-            aria-label="Previous page"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M15.41 16.59 10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41Z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="icon-button nav-arrow"
-            aria-label="Next page"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m8.59 16.59 4.58-4.59-4.58-4.59L10 6l6 6-6 6-1.41-1.41Z" />
-            </svg>
-          </button>
         </div>
       </section>
 
@@ -152,7 +230,7 @@ function UsersPage() {
                 <th>Level</th>
                 <th>Total Points</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -198,13 +276,27 @@ function UsersPage() {
                         <span
                           className={`status-chip ${isBanned ? "danger" : "success"}`}
                         >
-                          {isBanned ? "Banned" : "Active"}
+                          {user.status || "Active"}
                         </span>
                       </td>
                       <td>
-                        <button type="button" className="row-action">
-                          •••
-                        </button>
+                        {/* 🛠️ Inline Standard Action Configuration buttons */}
+                        <div className="inline-row-actions">
+                          <button
+                            type="button"
+                            className="btn-inline-edit"
+                            onClick={() => setEditingUser({ ...user })}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-inline-delete"
+                            onClick={() => setDeletingUser(user)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -214,6 +306,117 @@ function UsersPage() {
           </table>
         )}
       </section>
+
+      {/* --- EDIT MODAL --- */}
+      {editingUser && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h2>Edit Member Profile</h2>
+            <form onSubmit={handleUpdateUser}>
+              <label>Username</label>
+              <input
+                type="text"
+                value={editingUser.username}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, username: e.target.value })
+                }
+                required
+              />
+
+              <label>Email Address</label>
+              <input
+                type="email"
+                value={editingUser.email}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, email: e.target.value })
+                }
+                required
+              />
+
+              <div className="form-row">
+                <div>
+                  <label>Role</label>
+                  <select
+                    value={editingUser.role || "User"}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, role: e.target.value })
+                    }
+                  >
+                    <option value="User">User</option>
+                    <option value="Admin">Admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>Status</label>
+                  <select
+                    value={editingUser.status || "Active"}
+                    onChange={(e) =>
+                      setEditingUser({ ...editingUser, status: e.target.value })
+                    }
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Banned">Banned</option>
+                  </select>
+                </div>
+              </div>
+
+              <label>EcoQuest Total Points</label>
+              <input
+                type="number"
+                value={editingUser.points}
+                onChange={(e) =>
+                  setEditingUser({ ...editingUser, points: e.target.value })
+                }
+              />
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setEditingUser(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-save">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      {deletingUser && (
+        <div className="modal-overlay">
+          <div className="modal-card user-delete-warn">
+            <h2>Delete Account Entry?</h2>
+            <p>
+              Are you sure you want to completely remove{" "}
+              <strong>{deletingUser.username}</strong>? This will permanently
+              purge their accumulated eco points database metrics.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setDeletingUser(null)}
+              >
+                Keep Account
+              </button>
+              <button
+                type="button"
+                className="btn-confirm-delete"
+                onClick={handleDeleteUser}
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

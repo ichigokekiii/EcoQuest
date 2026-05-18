@@ -40,6 +40,70 @@ class UserController
             return ["error" => "Database error: " . $e->getMessage()];
         }
     }
+    // 4. Update an existing user's details (PUT)
+    // 4. Update an existing user's details safely (PUT)
+    public function updateUser($id, $data)
+    {
+        if (empty($id)) {
+            return ["success" => false, "message" => "Missing user ID for update."];
+        }
+
+        try {
+            $query = "UPDATE users 
+                      SET username = :username, 
+                          email = :email, 
+                          role = :role, 
+                          status = :status, 
+                          points = :points 
+                      WHERE id = :id";
+
+            $stmt = $this->conn->prepare($query);
+
+            // 🛠️ FIX: Assign raw values to variables with safe fallbacks first.
+            // This prevents PHP Notices if keys are missing from the incoming request payload.
+            $username = $data['username'] ?? '';
+            $email = $data['email'] ?? '';
+            $role = $data['role'] ?? 'User';
+            $status = $data['status'] ?? 'Active';
+            $points = isset($data['points']) ? (int) $data['points'] : 0;
+
+            // Bind parameters securely using the safe local variables
+            $stmt->bindParam(':username', $username);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':role', $role);
+            $stmt->bindParam(':status', $status);
+            $stmt->bindParam(':points', $points, PDO::PARAM_INT);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+            if ($stmt->execute()) {
+                return ["success" => true, "message" => "User updated successfully."];
+            }
+            return ["success" => false, "message" => "No rows were updated or execution failed."];
+        } catch (PDOException $e) {
+            return ["success" => false, "message" => "Database error: " . $e->getMessage()];
+        }
+    }
+
+    // 5. Delete a user from the system (DELETE)
+    public function deleteUser($id)
+    {
+        if (empty($id)) {
+            return ["success" => false, "message" => "Missing user ID for deletion."];
+        }
+
+        try {
+            $query = "DELETE FROM users WHERE id = :id";
+            $stmt = $this->conn->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+            if ($stmt->execute()) {
+                return ["success" => true, "message" => "User deleted successfully."];
+            }
+            return ["success" => false, "message" => "Failed to delete user."];
+        } catch (PDOException $e) {
+            return ["success" => false, "message" => "Database error: " . $e->getMessage()];
+        }
+    }
 
     // 3. Update registration default assignments if you handle signups here
     public function registerUser($data)

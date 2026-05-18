@@ -1,0 +1,26 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /trash-proofs/{userId}/{routeSessionId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if false;
+    }
+
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -16,6 +16,17 @@ function UsersPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
 
+  // NEW: Invite/Add User States
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [newUser, setNewUser] = useState({
+    username: "",
+    email: "",
+    password: "",
+    role: "User",
+    status: "Active",
+    points: 0,
+  });
+
   // 2. Fetch data from XAMPP local server on mount
   const fetchUsers = () => {
     setLoading(true);
@@ -40,12 +51,51 @@ function UsersPage() {
     fetchUsers();
   }, []);
 
+  // NEW: Backend Creation Handler (Create)
+  const handleCreateUser = (e) => {
+    e.preventDefault();
+
+    const formData = new FormData();
+    formData.append("username", newUser.username);
+    formData.append("email", newUser.email);
+    formData.append("password", newUser.password);
+    formData.append("role", newUser.role);
+    formData.append("status", newUser.status);
+    formData.append("points", Number(newUser.points || 0));
+
+    fetch("http://localhost/EcoQuest/api/index.php?endpoint=users", {
+      method: "POST",
+      body: formData,
+    })
+      .then((res) => {
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          return res.text().then((text) => {
+            throw new Error(`Server returned raw HTML text: ${text}`);
+          });
+        }
+        return res.json();
+      })
+      .then(() => {
+        setIsAddingUser(false);
+        // Reset creation form
+        setNewUser({
+          username: "",
+          email: "",
+          password: "",
+          role: "User",
+          status: "Active",
+          points: 0,
+        });
+        fetchUsers(); // Refresh data grid
+      })
+      .catch((err) => alert(`Registration Failed: ${err.message}`));
+  };
+
   // 3. Backend Mutation Handlers (Update & Delete)
   const handleUpdateUser = (e) => {
     e.preventDefault();
 
-    // Since our router handles multipart updates via POST when an ID is present,
-    // we use FormData here to allow future image uploads if needed, matching the new matrix.
     const formData = new FormData();
     formData.append("username", editingUser.username);
     formData.append("email", editingUser.email);
@@ -186,7 +236,12 @@ function UsersPage() {
             >
               Export CSV
             </button>
-            <button type="button" className="filled-action">
+            {/* UPDATED: Tied 'Invite User' action to toggle state */}
+            <button
+              type="button"
+              className="filled-action"
+              onClick={() => setIsAddingUser(true)}
+            >
               Invite User
             </button>
           </>
@@ -250,7 +305,6 @@ function UsersPage() {
                   const isAdmin = user.role?.toLowerCase() === "admin";
                   const isBanned = user.status?.toLowerCase() === "banned";
 
-                  // Resolve absolute URL dynamically for uploaded assets or local placeholder strings
                   const resolvedAvatarSrc =
                     user.image_url &&
                     (user.image_url.startsWith("http://") ||
@@ -282,7 +336,6 @@ function UsersPage() {
                                 objectFit: "cover",
                               }}
                               onError={(e) => {
-                                // If local file is missing from folder path, hide it to fall back to text initials
                                 e.target.style.display = "none";
                                 e.target.parentElement.innerHTML = getInitials(
                                   user.username,
@@ -344,6 +397,100 @@ function UsersPage() {
           </table>
         )}
       </section>
+
+      {/* --- NEW: INVITE/ADD USER MODAL --- */}
+      {isAddingUser && (
+        <div className="modal-overlay">
+          <div className="modal-card">
+            <h2>Invite New Community Member</h2>
+            <form onSubmit={handleCreateUser}>
+              <label>Username</label>
+              <input
+                type="text"
+                value={newUser.username}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, username: e.target.value })
+                }
+                placeholder="e.g. JuanCruz"
+                required
+              />
+
+              <label>Email Address</label>
+              <input
+                type="email"
+                value={newUser.email}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, email: e.target.value })
+                }
+                placeholder="name@domain.com"
+                required
+              />
+
+              <label>Account Password</label>
+              <input
+                type="password"
+                value={newUser.password}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, password: e.target.value })
+                }
+                placeholder="••••••••"
+                required
+              />
+
+              <div className="form-row">
+                <div>
+                  <label>Role</label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, role: e.target.value })
+                    }
+                  >
+                    <option value="User">User</option>
+                    <option value="Admin">Admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label>Status</label>
+                  <select
+                    value={newUser.status}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, status: e.target.value })
+                    }
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                    <option value="Banned">Banned</option>
+                  </select>
+                </div>
+              </div>
+
+              <label>Initial EcoQuest Points</label>
+              <input
+                type="number"
+                value={newUser.points}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, points: e.target.value })
+                }
+              />
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setIsAddingUser(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-save">
+                  Register Account
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* --- EDIT MODAL --- */}
       {editingUser && (

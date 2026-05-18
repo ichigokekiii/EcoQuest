@@ -1,94 +1,128 @@
-import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { colors, spacing, radius } from '../../src/constants/theme';
 import Card from '../../src/components/Card';
-import { spacing } from '../../src/constants/theme';
-import { getProfileData } from '../../src/services/api';
+
+const statsData = [
+  { id: '1', title: 'Total Points', value: '2,480', icon: 'zap' },
+  { id: '2', title: 'Trash Collected', value: '124', icon: 'trash-2' },
+  { id: '3', title: 'Routes Done', value: '8', icon: 'map' },
+  { id: '4', title: 'Missions Done', value: '5', icon: 'target' },
+];
+
+const achievementsData = [
+  { id: '1', title: 'First Route', icon: 'star' },
+  { id: '2', title: '100 Trash', icon: 'trash-2' },
+  { id: '3', title: '5 Routes', icon: 'map' },
+  { id: '4', title: 'Top 20', icon: 'award' },
+  { id: '5', title: 'Water Hero', icon: 'droplet' },
+  { id: '6', title: '7-Day Streak', icon: 'award' },
+];
 
 export default function ProfileScreen() {
-  const [profileData, setProfileData] = useState({
-    user: null,
-    activeSession: null,
-    recentSessions: [],
-  });
-
-  const loadProfile = useCallback(async () => {
-    try {
-      const data = await getProfileData();
-      setProfileData(data);
-    } catch (error) {
-      setProfileData({ user: null, activeSession: null, recentSessions: [] });
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
-    }, [loadProfile])
-  );
-
-  const user = profileData.user;
+  const [activeTab, setActiveTab] = useState('Activity'); // 'Activity', 'Competitions', 'Achievements'
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Card style={styles.heroCard}>
-          <View style={styles.avatar}>
-            <Feather name="user" size={28} color="#14532D" />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconCircle}>
+            <Feather name="user" size={18} color="#16A34A" />
           </View>
-          <Text style={styles.name}>{user?.name || 'Eco Quest User'}</Text>
-          <Text style={styles.level}>{user?.level || 'Green Ranger'}</Text>
-          <Text style={styles.email}>{user?.email || 'Not connected yet'}</Text>
+          <Text style={styles.headerTitle}>Profile</Text>
+        </View>
+        <TouchableOpacity style={styles.headerRight}>
+          <Feather name="settings" size={20} color="#6B7280" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabSelector}>
+        <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'Activity' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('Activity')}
+        >
+          <Text style={[styles.tabText, activeTab === 'Activity' && styles.tabTextActive]}>Activity</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'Competitions' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('Competitions')}
+        >
+          <Text style={[styles.tabText, activeTab === 'Competitions' && styles.tabTextActive]}>Competitions</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tabButton, activeTab === 'Achievements' && styles.tabButtonActive]}
+          onPress={() => setActiveTab('Achievements')}
+        >
+          <Text style={[styles.tabText, activeTab === 'Achievements' && styles.tabTextActive]}>Achievements</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Scrollable Content */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        style={styles.mainScrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
+        
+        {/* User Info Card */}
+        <Card style={styles.userInfoCard}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarCircle}>
+              <Feather name="user" size={32} color="#FFFFFF" />
+            </View>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelBadgeText}>Lv.7</Text>
+            </View>
+          </View>
+          
+          <View style={styles.userDetails}>
+            <Text style={styles.userName}>Alex Rivera</Text>
+            <Text style={styles.userHandle}>@alexr_eco</Text>
+            <View style={styles.userTagsRow}>
+              <View style={styles.guardianPill}>
+                <Text style={styles.guardianPillText}>Eco Guardian</Text>
+              </View>
+              <Text style={styles.rankText}>Rank #12</Text>
+            </View>
+          </View>
         </Card>
 
+        {/* 2x2 Stats Grid */}
         <View style={styles.statsGrid}>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{user?.points || 0}</Text>
-            <Text style={styles.statLabel}>Points</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{user?.totalTrashCollected || 0}</Text>
-            <Text style={styles.statLabel}>Trash Collected</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{user?.routesCompleted || 0}</Text>
-            <Text style={styles.statLabel}>Routes Completed</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{user?.missionsCompleted || 0}</Text>
-            <Text style={styles.statLabel}>Missions Won</Text>
-          </Card>
+          {statsData.map((stat) => (
+            <Card key={stat.id} style={styles.statCard}>
+              <Feather name={stat.icon} size={20} color="#9CA3AF" style={styles.statIcon} />
+              <Text style={styles.statValue}>{stat.value}</Text>
+              <Text style={styles.statTitle}>{stat.title}</Text>
+            </Card>
+          ))}
         </View>
 
-        {profileData.activeSession ? (
-          <Card style={styles.activeSessionCard}>
-            <Text style={styles.sectionTitle}>Current Active Route</Text>
-            <Text style={styles.activeRouteName}>{profileData.activeSession.routeName}</Text>
-            <Text style={styles.activeRouteMeta}>
-              {profileData.activeSession.approvedTrashCount}/
-              {profileData.activeSession.requiredTrashCount} required trash confirmed
-            </Text>
-          </Card>
-        ) : null}
+        {/* Achievements Card */}
+        <Card style={styles.achievementsCard}>
+          <View style={styles.achievementsHeader}>
+            <Text style={styles.achievementsTitle}>Achievements</Text>
+            <TouchableOpacity>
+              <Text style={styles.viewAllText}>View all</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.achievementsGrid}>
+            {achievementsData.map((item) => (
+              <View key={item.id} style={styles.achievementItem}>
+                <View style={styles.achievementCircle}>
+                  <Feather name={item.icon} size={20} color="#374151" />
+                </View>
+                <Text style={styles.achievementText}>{item.title}</Text>
+              </View>
+            ))}
+          </View>
+        </Card>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Sessions</Text>
-          <Text style={styles.sectionMeta}>From backend history</Text>
-        </View>
-
-        {profileData.recentSessions.map((session) => (
-          <Card key={session.id} style={styles.sessionCard}>
-            <View style={styles.sessionHeader}>
-              <Text style={styles.sessionTitle}>{session.routeName}</Text>
-              <Text style={styles.sessionStatus}>{session.status}</Text>
-            </View>
-            <Text style={styles.sessionMeta}>
-              Trash: {session.approvedTrashCount} • Points: {session.totalPointsEarned}
-            </Text>
-          </Card>
-        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -97,107 +131,208 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#FFFFFF',
   },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  heroCard: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  avatar: {
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#16A34A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  headerRight: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabSelector: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingHorizontal: spacing.lg,
+  },
+  tabButton: {
+    paddingVertical: spacing.sm,
+    marginRight: spacing.lg,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabButtonActive: {
+    borderBottomColor: '#111827',
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  tabTextActive: {
+    color: '#111827',
+  },
+  mainScrollView: {
+    backgroundColor: '#F9FAFB', // Light grey background
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  userInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginRight: spacing.lg,
+  },
+  avatarCircle: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#14532D',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
   },
-  name: {
+  levelBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#D97706',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  levelBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#111827',
-    fontSize: 24,
-    fontWeight: '900',
+    marginBottom: 2,
   },
-  level: {
-    color: '#16A34A',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  email: {
+  userHandle: {
+    fontSize: 14,
     color: '#6B7280',
+    marginBottom: 8,
+  },
+  userTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  guardianPill: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: spacing.sm,
+  },
+  guardianPillText: {
+    color: '#16A34A',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  rankText: {
+    color: '#9CA3AF',
     fontSize: 13,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
   },
   statCard: {
-    width: '47%',
-    gap: spacing.xs,
+    width: '48%',
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  statIcon: {
+    marginBottom: spacing.sm,
   },
   statValue: {
-    color: '#14532D',
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '900',
-  },
-  statLabel: {
-    color: '#6B7280',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  activeSessionCard: {
-    gap: spacing.xs,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
     color: '#111827',
-    fontSize: 20,
-    fontWeight: '900',
+    marginBottom: 4,
   },
-  sectionMeta: {
+  statTitle: {
+    fontSize: 13,
     color: '#9CA3AF',
-    fontSize: 12,
-    fontWeight: '700',
   },
-  activeRouteName: {
-    color: '#14532D',
-    fontSize: 18,
-    fontWeight: '800',
+  achievementsCard: {
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  activeRouteMeta: {
-    color: '#6B7280',
-    fontSize: 13,
-  },
-  sessionCard: {
-    gap: spacing.xs,
-  },
-  sessionHeader: {
+  achievementsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.lg,
   },
-  sessionTitle: {
+  achievementsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#111827',
-    fontSize: 16,
-    fontWeight: '800',
   },
-  sessionStatus: {
+  viewAllText: {
     color: '#16A34A',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  achievementsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  achievementItem: {
+    width: '30%', // Fits 3 in a row
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  achievementCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  achievementText: {
     fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  sessionMeta: {
     color: '#6B7280',
-    fontSize: 13,
-  },
+    textAlign: 'center',
+  }
 });

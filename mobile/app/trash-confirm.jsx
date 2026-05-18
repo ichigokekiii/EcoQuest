@@ -1,19 +1,9 @@
 import React, { useState } from 'react';
-import {
-  Alert,
-  Image,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { spacing, radius } from '../src/constants/theme';
-import { confirmTrash, getActiveRouteSession } from '../src/services/api';
 
 const CATEGORIES = ['Plastic', 'Paper', 'Glass', 'Metal', 'Organic', 'Mixed', 'Hazardous'];
 
@@ -23,28 +13,6 @@ export default function TrashConfirmScreen() {
   const [selectedCategory, setSelectedCategory] = useState('Plastic');
   const [quantity, setQuantity] = useState(1);
   const [isSuccessModalVisible, setSuccessModalVisible] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmitTrash = async () => {
-    try {
-      setSubmitting(true);
-      const sessionResponse = await getActiveRouteSession();
-
-      if (!sessionResponse.session) {
-        Alert.alert('No active route', 'Start a route before submitting trash.');
-        return;
-      }
-
-      await confirmTrash(sessionResponse.session.id);
-      setSuccessModalVisible(true);
-    } catch (error) {
-      const message =
-        error.response?.data?.message || 'Unable to confirm trash right now.';
-      Alert.alert('Submission failed', message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const incrementQuantity = () => setQuantity(prev => prev + 1);
   const decrementQuantity = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
@@ -120,15 +88,12 @@ export default function TrashConfirmScreen() {
 
       {/* Bottom Actions */}
       <View style={styles.bottomActions}>
-        <TouchableOpacity
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          disabled={submitting}
-          onPress={handleSubmitTrash}
+        <TouchableOpacity 
+          style={styles.submitButton}
+          onPress={() => setSuccessModalVisible(true)}
         >
           <Feather name="check" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.submitButtonText}>
-            {submitting ? 'Submitting...' : 'Submit Trash'}
-          </Text>
+          <Text style={styles.submitButtonText}>Submit Trash</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.retakeButton} onPress={() => router.back()}>
@@ -316,9 +281,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 20,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
   },
   submitButton: {
     backgroundColor: '#16A34A',

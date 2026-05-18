@@ -14,6 +14,21 @@ const { height, width } = Dimensions.get('window');
 const SNAP_TOP = 0;
 const SNAP_BOTTOM = 220; // Increased to ensure the inner buttons are pushed off-screen and lower the card slightly
 
+function normalizeRoute(route) {
+  const firstCoordinate = route.coordinates?.[0];
+
+  return {
+    ...route,
+    centerRegion: route.centerRegion || {
+      latitude: firstCoordinate?.latitude || 14.6096,
+      longitude: firstCoordinate?.longitude || 120.9904,
+      latitudeDelta: 0.02,
+      longitudeDelta: 0.02,
+    },
+    targetTrash: route.targetTrash || route.minimumTrashRequired || 0,
+  };
+}
+
 export default function ActiveRouteScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -66,7 +81,7 @@ export default function ActiveRouteScreen() {
   const fetchRouteDetails = async () => {
     try {
       const data = await getRouteById(id);
-      setRoute(data.route);
+      setRoute(normalizeRoute(data.route || data));
       setLoading(false);
     } catch (error) {
       console.log('Error fetching route details:', error);
@@ -165,7 +180,7 @@ export default function ActiveRouteScreen() {
                 <Text style={styles.sheetSubtitle}>TRASH COLLECTED</Text>
                 <View style={styles.countRow}>
                   <Text style={styles.largeCount}>0</Text>
-                  <Text style={styles.subCount}>/ {route.targetTrash}</Text>
+                  <Text style={styles.subCount}>/ {route.targetTrash || route.minimumTrashRequired || 0}</Text>
                 </View>
               </View>
               <View style={styles.pointsTextContainer}>
@@ -180,12 +195,12 @@ export default function ActiveRouteScreen() {
               </View>
               <View style={styles.progressLabels}>
                 <Text style={styles.progressLabelText}>0</Text>
-                <Text style={styles.progressLabelActive}>Goal: {route.targetTrash}</Text>
+                <Text style={styles.progressLabelActive}>Goal: {route.targetTrash || route.minimumTrashRequired || 0}</Text>
               </View>
             </View>
 
             {/* Below items are hidden when collapsed */}
-            <Text style={styles.unlockGrayText}>Collect {route.targetTrash} trash to complete the route</Text>
+            <Text style={styles.unlockGrayText}>Collect {route.targetTrash || route.minimumTrashRequired || 0} trash to complete the route</Text>
 
             <TouchableOpacity style={styles.addPhotoButton} onPress={() => router.push({ pathname: '/camera', params: { id: route.id } })}>
               <Feather name="camera" size={20} color="#FFFFFF" style={styles.cameraIcon} />

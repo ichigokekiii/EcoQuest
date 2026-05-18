@@ -27,6 +27,7 @@ export default function LoginScreen() {
 
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
+
       try {
         await api.get('/users/me');
       } catch (profileError) {

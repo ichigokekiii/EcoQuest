@@ -1,333 +1,136 @@
-import React, { useCallback, useState } from 'react';
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { colors, spacing, radius } from '../../src/constants/theme';
 import Card from '../../src/components/Card';
-import { radius, spacing } from '../../src/constants/theme';
-import {
-  confirmTrash,
-  finishRouteSession,
-  getMissionsData,
-  resetDemoState,
-  startRouteSession,
-} from '../../src/services/api';
 
-function getProgressWidth(current, target) {
-  if (!target) {
-    return '0%';
-  }
+const mockActiveMissions = [
+  { id: 'a1', title: 'Plastic Patrol', subtitle: 'Collect 5 plastic bottles', points: 50, current: 3, target: 5 },
+  { id: 'a2', title: 'Trail Guardian', subtitle: 'Complete 3 routes this week', points: 150, current: 1, target: 3 },
+  { id: 'a3', title: 'Big Haul', subtitle: 'Collect 30 trash items total', points: 200, current: 22, target: 30 },
+];
 
-  return `${Math.min((current / target) * 100, 100)}%`;
-}
+const mockCompletedMissions = [
+  { id: 'c1', title: 'First Steps', subtitle: 'Completed your first route', points: 100 },
+  { id: 'c2', title: 'Paper Chase', subtitle: 'Collected 3 paper items', points: 30 },
+];
 
 export default function MissionsScreen() {
-  const router = useRouter();
-  const [missionsData, setMissionsData] = useState(null);
-  const [loadingAction, setLoadingAction] = useState('');
+  const [activeTab, setActiveTab] = useState('Active'); // 'Active', 'Completed', 'All'
 
-  const loadMissions = useCallback(async () => {
-    try {
-      const data = await getMissionsData();
-      setMissionsData(data);
-    } catch (error) {
-      Alert.alert('Backend unavailable', 'Unable to load mission data right now.');
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadMissions();
-    }, [loadMissions])
-  );
-
-  const activeSession = missionsData?.activeSession || null;
-  const availableRoutes = missionsData?.availableRoutes || [];
-  const history = missionsData?.history || [];
-  const canFinish = missionsData?.canFinish || false;
-
-  const handleStartRoute = async (routeId) => {
-    try {
-      setLoadingAction(`start-${routeId}`);
-      await startRouteSession(routeId);
-      await loadMissions();
-    } catch (error) {
-      const message =
-        error.response?.data?.message || 'Unable to start that route right now.';
-      Alert.alert('Route not started', message);
-    } finally {
-      setLoadingAction('');
-    }
+  const renderActiveMission = (mission) => {
+    const progressPercent = (mission.current / mission.target) * 100;
+    return (
+      <Card key={mission.id} style={styles.missionCard}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.iconCircleLight}>
+            <Feather name="target" size={20} color="#16A34A" />
+          </View>
+          <View style={styles.cardTextContent}>
+            <Text style={styles.missionTitle}>{mission.title}</Text>
+            <Text style={styles.missionSubtitle}>{mission.subtitle}</Text>
+          </View>
+          <View style={styles.pointsWrapper}>
+            <Feather name="zap" size={14} color="#16A34A" />
+            <Text style={styles.pointsText}>+{mission.points}</Text>
+          </View>
+        </View>
+        <View style={styles.progressRow}>
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+          </View>
+          <Text style={styles.progressFraction}>{mission.current}/{mission.target}</Text>
+        </View>
+      </Card>
+    );
   };
 
-  const handleConfirmTrash = async () => {
-    if (!activeSession) {
-      return;
-    }
-
-    try {
-      setLoadingAction('confirm');
-      const response = await confirmTrash(activeSession.id);
-      await loadMissions();
-
-      const activeMission = response.session.missionProgress[0];
-      Alert.alert(
-        'Trash confirmed',
-        `${response.session.approvedTrashCount} items counted. ${activeMission.currentCount}/${activeMission.requiredCount} for the active mission.`
-      );
-    } catch (error) {
-      const message =
-        error.response?.data?.message || 'Unable to confirm trash right now.';
-      Alert.alert('Confirmation failed', message);
-    } finally {
-      setLoadingAction('');
-    }
-  };
-
-  const handleFinishRoute = async () => {
-    if (!activeSession) {
-      return;
-    }
-
-    try {
-      setLoadingAction('finish');
-      const response = await finishRouteSession(activeSession.id);
-      await loadMissions();
-
-      Alert.alert(
-        'Route completed',
-        `You earned ${response.summary.totalPointsEarned} points for this run.`
-      );
-    } catch (error) {
-      const message =
-        error.response?.data?.message || 'Unable to finish the route right now.';
-      Alert.alert('Finish failed', message);
-    } finally {
-      setLoadingAction('');
-    }
-  };
-
-  const handleResetDemo = async () => {
-    try {
-      setLoadingAction('reset');
-      await resetDemoState();
-      await loadMissions();
-    } catch (error) {
-      Alert.alert('Reset failed', 'Unable to reset the demo state right now.');
-    } finally {
-      setLoadingAction('');
-    }
+  const renderCompletedMission = (mission) => {
+    return (
+      <Card key={mission.id} style={styles.missionCard}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.iconCircleSolid}>
+            <Feather name="check" size={20} color="#FFFFFF" />
+          </View>
+          <View style={styles.cardTextContent}>
+            <Text style={styles.missionTitleCompleted}>{mission.title}</Text>
+            <Text style={styles.missionSubtitleCompleted}>{mission.subtitle}</Text>
+          </View>
+          <View style={styles.pointsBadge}>
+            <Feather name="zap" size={12} color="#16A34A" />
+            <Text style={styles.pointsBadgeText}>+{mission.points}</Text>
+          </View>
+        </View>
+      </Card>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Mission Control</Text>
-          <Text style={styles.subtitle}>
-            This tab now runs from the backend mock API instead of a placeholder screen.
-          </Text>
+          <Text style={styles.headerTitle}>Missions</Text>
+          <View style={styles.doneBadge}>
+            <Feather name="check" size={14} color="#16A34A" />
+            <Text style={styles.doneBadgeText}>{mockCompletedMissions.length} Done</Text>
+          </View>
         </View>
 
-        {activeSession ? (
-          <>
-            <Card style={styles.heroCard}>
-              <View style={styles.heroHeader}>
-                <View>
-                  <Text style={styles.heroLabel}>Active Route</Text>
-                  <Text style={styles.heroTitle}>{activeSession.routeName}</Text>
-                </View>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusBadgeText}>{activeSession.status}</Text>
-                </View>
-              </View>
-
-              <View style={styles.metricRow}>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activeSession.approvedTrashCount}</Text>
-                  <Text style={styles.metricLabel}>Confirmed Trash</Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activeSession.requiredTrashCount}</Text>
-                  <Text style={styles.metricLabel}>Required Trash</Text>
-                </View>
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{activeSession.visualMaxGoal}</Text>
-                  <Text style={styles.metricLabel}>Visual Goal</Text>
-                </View>
-              </View>
-
-              <View style={styles.progressBlock}>
-                <View style={styles.progressHeader}>
-                  <Text style={styles.progressLabel}>Route progress</Text>
-                  <Text style={styles.progressValue}>
-                    {activeSession.approvedTrashCount} / {activeSession.visualMaxGoal}
-                  </Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: getProgressWidth(
-                          activeSession.approvedTrashCount,
-                          activeSession.visualMaxGoal
-                        ),
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/active-route',
-                      params: { id: activeSession.routeId },
-                    })
-                  }
-                >
-                  <Feather name="map" size={16} color="#14532D" />
-                  <Text style={styles.secondaryButtonText}>Open Active Route Map</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleConfirmTrash}
-                  disabled={loadingAction === 'confirm'}
-                >
-                  <Feather name="trash-2" size={16} color="#FFFFFF" />
-                  <Text style={styles.primaryButtonText}>
-                    {loadingAction === 'confirm' ? 'Confirming...' : 'Confirm Trash +1'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.secondaryButton, !canFinish && styles.secondaryButtonDisabled]}
-                  onPress={handleFinishRoute}
-                  disabled={!canFinish || loadingAction === 'finish'}
-                >
-                  <Feather
-                    name="check-circle"
-                    size={16}
-                    color={!canFinish ? '#9CA3AF' : '#14532D'}
-                  />
-                  <Text
-                    style={[
-                      styles.secondaryButtonText,
-                      !canFinish && styles.secondaryButtonTextDisabled,
-                    ]}
-                  >
-                    {loadingAction === 'finish' ? 'Finishing...' : 'Finish Route'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </Card>
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Mission Progress</Text>
-              <TouchableOpacity onPress={handleResetDemo}>
-                <Text style={styles.sectionAction}>
-                  {loadingAction === 'reset' ? 'Resetting...' : 'Reset Demo'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {activeSession.missionProgress.map((mission) => (
-              <Card key={mission.missionId} style={styles.missionCard}>
-                <View style={styles.missionRow}>
-                  <View style={styles.missionIconWrap}>
-                    <Feather
-                      name={mission.isCompleted ? 'award' : 'target'}
-                      size={18}
-                      color={mission.isCompleted ? '#FFFFFF' : '#14532D'}
-                    />
-                  </View>
-                  <View style={styles.missionCopy}>
-                    <Text style={styles.missionName}>{mission.title}</Text>
-                    <Text style={styles.missionMeta}>
-                      Category: {mission.trashCategoryName || 'Any trash'}
-                    </Text>
-                  </View>
-                  <Text style={styles.missionCount}>
-                    {mission.currentCount}/{mission.requiredCount}
-                  </Text>
-                </View>
-                <View style={styles.missionTrack}>
-                  <View
-                    style={[
-                      styles.missionFill,
-                      {
-                        width: getProgressWidth(mission.currentCount, mission.requiredCount),
-                        backgroundColor: mission.isCompleted ? '#16A34A' : '#14532D',
-                      },
-                    ]}
-                  />
-                </View>
-              </Card>
-            ))}
-          </>
-        ) : (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Start a Route</Text>
-              <TouchableOpacity onPress={handleResetDemo}>
-                <Text style={styles.sectionAction}>
-                  {loadingAction === 'reset' ? 'Resetting...' : 'Reset Demo'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {availableRoutes.map((route) => (
-              <Card key={route.id} style={styles.availableRouteCard}>
-                <View style={styles.availableRouteHeader}>
-                  <View>
-                    <Text style={styles.availableRouteTitle}>{route.title}</Text>
-                    <Text style={styles.availableRouteMeta}>
-                      {route.locationName} • {route.minTrash}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.startButton}
-                    onPress={() => handleStartRoute(route.id)}
-                    disabled={loadingAction === `start-${route.id}`}
-                  >
-                    <Text style={styles.startButtonText}>
-                      {loadingAction === `start-${route.id}` ? 'Starting...' : 'Start Route'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </Card>
-            ))}
-          </>
-        )}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Route History</Text>
-          <Text style={styles.historyHint}>Mock session records</Text>
+        {/* Weekly Progress Card */}
+        <View style={styles.weeklyProgressCard}>
+          <View style={styles.weeklyHeaderRow}>
+            <Text style={styles.weeklyTitle}>Weekly Progress</Text>
+            <Text style={styles.weeklyPointsText}>380 / 500 pts</Text>
+          </View>
+          <View style={styles.weeklyProgressBarBg}>
+            <View style={[styles.weeklyProgressBarFill, { width: '76%' }]} />
+          </View>
+          <Text style={styles.weeklyFooterText}>120 pts more to unlock weekly reward</Text>
         </View>
 
-        {history.map((session) => (
-          <Card key={session.id} style={styles.historyCard}>
-            <View style={styles.historyHeader}>
-              <Text style={styles.historyTitle}>{session.routeName}</Text>
-              <Text style={styles.historyStatus}>{session.status}</Text>
+        {/* Tab Selector */}
+        <View style={styles.tabSelector}>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'Active' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('Active')}
+          >
+            <Text style={[styles.tabText, activeTab === 'Active' && styles.tabTextActive]}>Active ({mockActiveMissions.length})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'Completed' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('Completed')}
+          >
+            <Text style={[styles.tabText, activeTab === 'Completed' && styles.tabTextActive]}>Completed ({mockCompletedMissions.length})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tabButton, activeTab === 'All' && styles.tabButtonActive]}
+            onPress={() => setActiveTab('All')}
+          >
+            <Text style={[styles.tabText, activeTab === 'All' && styles.tabTextActive]}>All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Mission Lists */}
+        <View style={styles.listContainer}>
+          {(activeTab === 'Active' || activeTab === 'All') && (
+            <View>
+              {mockActiveMissions.map(renderActiveMission)}
             </View>
-            <Text style={styles.historyMeta}>
-              Trash collected: {session.approvedTrashCount} • Points earned:{' '}
-              {session.totalPointsEarned}
-            </Text>
-          </Card>
-        ))}
+          )}
+
+          {(activeTab === 'Completed' || activeTab === 'All') && (
+            <View style={styles.completedSection}>
+              {(activeTab === 'All' || activeTab === 'Completed') && (
+                <Text style={styles.sectionTitle}>Completed</Text>
+              )}
+              {mockCompletedMissions.map(renderCompletedMission)}
+            </View>
+          )}
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -336,267 +139,206 @@ export default function MissionsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#FFFFFF',
   },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.md,
+  scrollContent: {
+    paddingBottom: spacing.xl,
   },
   header: {
-    gap: spacing.xs,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  title: {
-    fontSize: 30,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: '900',
     color: '#111827',
   },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#6B7280',
-  },
-  heroCard: {
-    gap: spacing.md,
-    backgroundColor: '#14532D',
-  },
-  heroHeader: {
+  doneBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  heroLabel: {
-    color: '#86EFAC',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  heroTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  statusBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
-  statusBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'capitalize',
+  doneBadgeText: {
+    color: '#16A34A',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 4,
   },
-  metricRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  weeklyProgressCard: {
+    backgroundColor: '#F7F8FA',
+    marginHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  metricCard: {
-    flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  metricValue: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  metricLabel: {
-    color: '#DCFCE7',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  progressBlock: {
-    gap: spacing.sm,
-  },
-  progressHeader: {
+  weeklyHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
-  progressLabel: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+  weeklyTitle: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
   },
-  progressValue: {
-    color: '#DCFCE7',
+  weeklyPointsText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#16A34A',
+  },
+  weeklyProgressBarBg: {
+    height: 8,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 4,
+    marginBottom: spacing.sm,
+    width: '100%',
+  },
+  weeklyProgressBarFill: {
+    height: 8,
+    backgroundColor: '#16A34A',
+    borderRadius: 4,
+  },
+  weeklyFooterText: {
     fontSize: 13,
-    fontWeight: '700',
-  },
-  progressTrack: {
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#22C55E',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  primaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: '#22C55E',
-    paddingVertical: 14,
-    borderRadius: radius.md,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
-    borderRadius: radius.md,
-  },
-  secondaryButtonDisabled: {
-    backgroundColor: '#F3F4F6',
-  },
-  secondaryButtonText: {
-    color: '#14532D',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  secondaryButtonTextDisabled: {
     color: '#9CA3AF',
   },
-  sectionHeader: {
+  tabSelector: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  sectionTitle: {
+  tabButton: {
+    paddingVertical: spacing.sm,
+    marginRight: spacing.lg,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabButtonActive: {
+    borderBottomColor: '#111827',
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  tabTextActive: {
     color: '#111827',
-    fontSize: 20,
-    fontWeight: '900',
   },
-  sectionAction: {
-    color: '#16A34A',
-    fontSize: 13,
-    fontWeight: '700',
+  listContainer: {
+    paddingHorizontal: spacing.lg,
   },
   missionCard: {
-    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  missionRow: {
+  cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
   },
-  missionIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  iconCircleLight: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#DCFCE7',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: spacing.md,
   },
-  missionCopy: {
+  iconCircleSolid: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#4ADE80',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  cardTextContent: {
     flex: 1,
   },
-  missionName: {
-    color: '#111827',
+  missionTitle: {
     fontSize: 16,
-    fontWeight: '800',
-  },
-  missionMeta: {
-    color: '#6B7280',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  missionCount: {
-    color: '#14532D',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  missionTrack: {
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  missionFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  availableRouteCard: {
-    gap: spacing.sm,
-  },
-  availableRouteHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  availableRouteTitle: {
+    fontWeight: 'bold',
     color: '#111827',
-    fontSize: 18,
-    fontWeight: '800',
+    marginBottom: 2,
   },
-  availableRouteMeta: {
-    color: '#6B7280',
+  missionSubtitle: {
     fontSize: 13,
-    marginTop: 2,
-  },
-  startButton: {
-    backgroundColor: '#14532D',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  startButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  historyHint: {
     color: '#9CA3AF',
-    fontSize: 12,
-    fontWeight: '700',
   },
-  historyCard: {
-    gap: spacing.xs,
+  missionTitleCompleted: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#9CA3AF',
+    textDecorationLine: 'line-through',
+    marginBottom: 2,
   },
-  historyHeader: {
+  missionSubtitleCompleted: {
+    fontSize: 13,
+    color: '#D1D5DB',
+  },
+  pointsWrapper: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  historyTitle: {
-    color: '#111827',
+  pointsText: {
     fontSize: 16,
-    fontWeight: '800',
-  },
-  historyStatus: {
+    fontWeight: 'bold',
     color: '#16A34A',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'capitalize',
+    marginLeft: 2,
   },
-  historyMeta: {
-    color: '#6B7280',
+  pointsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  pointsBadgeText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#16A34A',
+    marginLeft: 2,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    paddingLeft: 60, // Align with text start
+  },
+  progressBarBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 3,
+    marginRight: spacing.sm,
+  },
+  progressBarFill: {
+    height: 6,
+    backgroundColor: '#16A34A',
+    borderRadius: 3,
+  },
+  progressFraction: {
     fontSize: 13,
-    lineHeight: 20,
+    color: '#6B7280',
+    fontWeight: '500',
   },
+  completedSection: {
+    marginTop: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: spacing.md,
+  }
 });

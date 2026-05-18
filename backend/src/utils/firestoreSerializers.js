@@ -53,6 +53,19 @@ function buildRouteMarkers(route) {
   return markers;
 }
 
+function buildCenterRegion(route) {
+  const coordinate =
+    route.path?.[0] ||
+    (route.startLocation?.lat && route.startLocation?.lng ? route.startLocation : null);
+
+  return {
+    latitude: coordinate?.lat || 37.79,
+    longitude: coordinate?.lng || -122.42,
+    latitudeDelta: 0.02,
+    longitudeDelta: 0.02,
+  };
+}
+
 function serializeDoc(doc) {
   return {
     id: doc.id,
@@ -70,8 +83,10 @@ function serializeRoute(doc) {
     distance: `${route.distanceKm} km`,
     duration: `${route.estimatedTimeMinutes} min`,
     minTrash: `Min ${route.minimumTrashRequired}`,
+    targetTrash: route.minimumTrashRequired,
     points: route.basePoints,
     coordinates: mapRoutePathToCoordinates(route.path),
+    centerRegion: buildCenterRegion(route),
     markers: buildRouteMarkers(route),
   };
 }

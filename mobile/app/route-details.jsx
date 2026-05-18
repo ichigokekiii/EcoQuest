@@ -4,11 +4,31 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { spacing, radius } from '../src/constants/theme';
+import { colors, spacing, radius } from '../src/constants/theme';
 import Card from '../src/components/Card';
 import { getRouteById, startRouteSession } from '../src/services/api';
 
 const { width, height } = Dimensions.get('window');
+
+function getDifficultyLabel(difficulty) {
+  if (!difficulty) return 'Easy';
+  return difficulty.charAt(0).toUpperCase() + difficulty.slice(1).toLowerCase();
+}
+
+function normalizeRoute(route) {
+  const firstCoordinate = route.coordinates?.[0];
+
+  return {
+    ...route,
+    centerRegion: route.centerRegion || {
+      latitude: firstCoordinate?.latitude || 14.6096,
+      longitude: firstCoordinate?.longitude || 120.9904,
+      latitudeDelta: 0.02,
+      longitudeDelta: 0.02,
+    },
+    targetTrash: route.targetTrash || route.minimumTrashRequired || 0,
+  };
+}
 
 export default function RouteDetailsScreen() {
   const router = useRouter();
@@ -26,7 +46,7 @@ export default function RouteDetailsScreen() {
   const fetchRouteDetails = async () => {
     try {
       const data = await getRouteById(id);
-      setRoute(data.route);
+      setRoute(normalizeRoute(data.route || data));
       setLoading(false);
     } catch (error) {
       console.log('Error fetching route details:', error);
@@ -83,8 +103,8 @@ export default function RouteDetailsScreen() {
         </SafeAreaView>
 
         {/* Floating Badges */}
-        <View style={[styles.easyBadge, route.difficulty === 'Medium' && styles.mediumBadge, route.difficulty === 'Hard' && styles.hardBadge]}>
-          <Text style={[styles.easyBadgeText, route.difficulty === 'Medium' && styles.mediumBadgeText, route.difficulty === 'Hard' && styles.hardBadgeText]}>{route.difficulty}</Text>
+        <View style={[styles.easyBadge, getDifficultyLabel(route.difficulty) === 'Medium' && styles.mediumBadge, getDifficultyLabel(route.difficulty) === 'Hard' && styles.hardBadge]}>
+          <Text style={[styles.easyBadgeText, getDifficultyLabel(route.difficulty) === 'Medium' && styles.mediumBadgeText, getDifficultyLabel(route.difficulty) === 'Hard' && styles.hardBadgeText]}>{getDifficultyLabel(route.difficulty)}</Text>
         </View>
         <View style={styles.distanceBadge}>
           <Text style={styles.distanceBadgeText}>{route.distance}</Text>
@@ -132,14 +152,14 @@ export default function RouteDetailsScreen() {
         <Card style={styles.trashGoalCard}>
           <View style={styles.trashGoalHeader}>
             <Text style={styles.trashGoalLabel}>Goal target</Text>
-            <Text style={styles.trashGoalTarget}>{route.targetTrash} items</Text>
+            <Text style={styles.trashGoalTarget}>{route.targetTrash || route.minimumTrashRequired || 0} items</Text>
           </View>
           <View style={styles.goalProgressBarBg}>
             <View style={[styles.goalProgressBarFill, { width: '50%' }]} />
           </View>
           <View style={styles.goalProgressLabels}>
             <Text style={styles.goalProgressSubtext}>0</Text>
-            <Text style={styles.goalProgressActive}>Goal: {route.targetTrash}</Text>
+            <Text style={styles.goalProgressActive}>Goal: {route.targetTrash || route.minimumTrashRequired || 0}</Text>
           </View>
         </Card>
 
@@ -164,7 +184,7 @@ export default function RouteDetailsScreen() {
 
       {/* Fixed Bottom Button */}
       <View style={[styles.bottomActionContainer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-        <TouchableOpacity
+        <TouchableOpacity 
           style={[styles.startButton, starting && styles.startButtonDisabled]}
           disabled={starting}
           onPress={async () => {
@@ -173,7 +193,8 @@ export default function RouteDetailsScreen() {
               await startRouteSession(route.id);
               router.push({ pathname: '/active-route', params: { id: route.id } });
             } catch (error) {
-              console.log('Error starting route:', error);
+              console.log('Error starting route session:', error);
+              router.push({ pathname: '/active-route', params: { id: route.id } });
             } finally {
               setStarting(false);
             }

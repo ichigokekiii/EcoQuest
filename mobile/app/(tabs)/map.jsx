@@ -1,79 +1,48 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { radius, spacing } from '../../src/constants/theme';
+import { colors, spacing, radius } from '../../src/constants/theme';
 import Card from '../../src/components/Card';
-import { getActiveRouteSession, getNearbyRoutes } from '../../src/services/api';
+import { getNearbyRoutes } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
+
 const CARD_WIDTH = width * 0.8;
 const CARD_MARGIN = spacing.sm;
 
+function getDifficultyLabel(difficulty) {
+  if (!difficulty) return 'Easy';
+  return difficulty.charAt(0).toUpperCase() + difficulty.slice(1).toLowerCase();
+}
+
 export default function MapScreen() {
-  const [routes, setRoutes] = useState([]);
-  const [activeSession, setActiveSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('All Routes');
-  const mapRef = useRef(null);
   const router = useRouter();
+  const [routes, setRoutes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const mapRef = useRef(null);
+  const [activeFilter, setActiveFilter] = useState('All Routes');
+  const visibleRoutes =
+    activeFilter === 'All Routes'
+      ? routes
+      : routes.filter((route) => getDifficultyLabel(route.difficulty) === activeFilter);
 
-  const loadMapData = useCallback(async () => {
-    try {
-      const [routesResponse, sessionResponse] = await Promise.all([
-        getNearbyRoutes(),
-        getActiveRouteSession(),
-      ]);
-
-      const nextRoutes = routesResponse.routes || [];
-
-      setRoutes(nextRoutes);
-      setActiveSession(sessionResponse.session || null);
-
-      if (nextRoutes[0]?.coordinates?.length && mapRef.current) {
-        const firstPoint = nextRoutes[0].coordinates[0];
-
-        mapRef.current.animateToRegion(
-          {
-            latitude: firstPoint.latitude,
-            longitude: firstPoint.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          },
-          1000
-        );
-      }
-    } catch (error) {
-      Alert.alert('Backend unavailable', 'Unable to load route data right now.');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    fetchRoutes();
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadMapData();
-    }, [loadMapData])
-  );
-
-  const filteredRoutes = useMemo(() => {
-    if (activeFilter === 'All Routes') {
-      return routes;
+  const fetchRoutes = async () => {
+    try {
+      const data = await getNearbyRoutes();
+      setRoutes(data.routes || []);
+      setLoading(false);
+    } catch (error) {
+      console.log('Error fetching routes:', error);
+      setLoading(false);
     }
-
-    return routes.filter((route) => route.difficulty === activeFilter);
-  }, [activeFilter, routes]);
+  };
 
   const initialRegion = {
     latitude: 14.6096,
@@ -88,34 +57,6 @@ export default function MapScreen() {
     }
   };
 
-  const handleRouteAction = async (route) => {
-    if (activeSession?.routeId === route.id) {
-      router.push({ pathname: '/active-route', params: { id: route.id } });
-      return;
-    }
-
-    if (activeSession) {
-      return;
-    }
-
-    router.push({ pathname: '/route-details', params: { id: route.id } });
-  };
-
-  const getRouteActionLabel = (route) => {
-    if (activeSession?.routeId === route.id) {
-      return 'Open Route';
-    }
-
-    if (activeSession) {
-      return 'Route Busy';
-    }
-
-    return 'View Details';
-  };
-
-  const isActionDisabled = (route) =>
-    Boolean(activeSession && activeSession.routeId !== route.id);
-
   return (
     <View style={styles.container}>
       <MapView
@@ -123,27 +64,35 @@ export default function MapScreen() {
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={initialRegion}
-        showsUserLocation
+        showsUserLocation={true}
         showsCompass={false}
       >
-        {filteredRoutes.map((route) => (
+        {visibleRoutes.map((route) => (
           <React.Fragment key={route.id}>
+            {/* Draw Path */}
             <Polyline
               coordinates={route.coordinates}
               strokeColor="#16A34A"
-              strokeWidth={3}
+              strokeWidth={4}
               lineDashPattern={[5, 5]}
+              lineCap="round"
+              lineJoin="round"
             />
+            {/* Draw Markers */}
             {route.markers.map((marker) => (
-              <Marker key={marker.id} coordinate={marker.coordinate} anchor={{ x: 0.5, y: 0.5 }}>
+              <Marker
+                key={marker.id}
+                coordinate={marker.coordinate}
+                anchor={{ x: 0.5, y: 0.5 }}
+              >
                 <View style={[styles.customMarker, { backgroundColor: marker.color }]}>
-                  <Feather name="leaf" size={16} color="#FFFFFF" />
+                  <Feather name="wind" size={16} color="#FFFFFF" />
                 </View>
-                {marker.type === 'start' ? (
+                {marker.type === 'start' && (
                   <View style={styles.markerLabelContainer}>
                     <Text style={styles.markerLabel}>{route.title.split(' ')[0]}</Text>
                   </View>
-                ) : null}
+                )}
               </Marker>
             ))}
           </React.Fragment>
@@ -151,6 +100,7 @@ export default function MapScreen() {
       </MapView>
 
       <SafeAreaView style={styles.overlayContainer} pointerEvents="box-none">
+        {/* Top Search Bar */}
         <View style={styles.topContainer}>
           <View style={styles.searchContainer}>
             <Feather name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
@@ -168,7 +118,10 @@ export default function MapScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Bottom Section: Filters and Cards */}
         <View style={styles.bottomSection} pointerEvents="box-none">
+
+          {/* Floating Filter Pills */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -176,42 +129,41 @@ export default function MapScreen() {
             style={styles.filterScroll}
           >
             <View style={styles.filterPillsContainer}>
-              {['All Routes', 'Easy', 'Medium', 'Hard'].map((filter) => (
-                <TouchableOpacity
-                  key={filter}
-                  style={[
-                    styles.filterPill,
-                    activeFilter === filter && styles.filterPillActive,
-                  ]}
-                  onPress={() => setActiveFilter(filter)}
-                >
-                  <Feather
-                    name={
-                      filter === 'All Routes'
-                        ? 'map'
-                        : filter === 'Easy'
-                          ? 'wind'
-                          : filter === 'Medium'
-                            ? 'target'
-                            : 'zap'
-                    }
-                    size={14}
-                    color={activeFilter === filter ? '#FFFFFF' : '#6B7280'}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={[
-                      styles.filterPillText,
-                      activeFilter === filter && styles.filterPillTextActive,
-                    ]}
-                  >
-                    {filter}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              <TouchableOpacity
+                style={[styles.filterPill, activeFilter === 'All Routes' && styles.filterPillActive]}
+                onPress={() => setActiveFilter('All Routes')}
+              >
+                <Feather name="map" size={14} color={activeFilter === 'All Routes' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Text style={[styles.filterPillText, activeFilter === 'All Routes' && styles.filterPillTextActive]}>All Routes</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, activeFilter === 'Easy' && styles.filterPillActive]}
+                onPress={() => setActiveFilter('Easy')}
+              >
+                <Feather name="wind" size={14} color={activeFilter === 'Easy' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Text style={[styles.filterPillText, activeFilter === 'Easy' && styles.filterPillTextActive]}>Easy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, activeFilter === 'Medium' && styles.filterPillActive]}
+                onPress={() => setActiveFilter('Medium')}
+              >
+                <Feather name="target" size={14} color={activeFilter === 'Medium' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Text style={[styles.filterPillText, activeFilter === 'Medium' && styles.filterPillTextActive]}>Medium</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, activeFilter === 'Hard' && styles.filterPillActive]}
+                onPress={() => setActiveFilter('Hard')}
+              >
+                <Feather name="zap" size={14} color={activeFilter === 'Hard' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Text style={[styles.filterPillText, activeFilter === 'Hard' && styles.filterPillTextActive]}>Hard</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
 
+          {/* Horizontal Route Cards */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -219,26 +171,18 @@ export default function MapScreen() {
             decelerationRate="fast"
             contentContainerStyle={styles.cardsScrollContent}
           >
-            {filteredRoutes.map((route) => (
+            {visibleRoutes.map((route) => (
               <Card key={route.id} style={styles.routeCard}>
                 <View style={styles.routeHeaderRow}>
                   <Text style={styles.routeTitle}>{route.title}</Text>
-                  <View
-                    style={[
-                      styles.badge,
-                      route.difficulty === 'Easy' ? styles.badgeEasy : styles.badgeMedium,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.badgeText,
-                        route.difficulty === 'Easy'
-                          ? styles.badgeTextEasy
-                          : styles.badgeTextMedium,
-                      ]}
-                    >
-                      {route.difficulty}
-                    </Text>
+                  <View style={[
+                    styles.badge,
+                    getDifficultyLabel(route.difficulty) === 'Easy' ? styles.badgeEasy : styles.badgeMedium
+                  ]}>
+                    <Text style={[
+                      styles.badgeText,
+                      getDifficultyLabel(route.difficulty) === 'Easy' ? styles.badgeTextEasy : styles.badgeTextMedium
+                    ]}>{getDifficultyLabel(route.difficulty)}</Text>
                   </View>
                 </View>
 
@@ -256,9 +200,9 @@ export default function MapScreen() {
                     <Feather name="clock" size={14} color="#9CA3AF" />
                     <Text style={styles.routeStatText}>{route.duration}</Text>
                   </View>
-                  <View style={styles.routeStat}>
-                    <Feather name="trash-2" size={14} color="#9CA3AF" />
-                    <Text style={styles.routeStatText}>{route.minTrash}</Text>
+                  <View style={styles.routeStatItem}>
+                    <Feather name="trash-2" size={14} color="#6B7280" style={styles.routeStatIcon} />
+                    <Text style={styles.routeStatText}>Goal: {route.targetTrash || route.minimumTrashRequired || 0}</Text>
                   </View>
                 </View>
 
@@ -268,33 +212,16 @@ export default function MapScreen() {
                     <Text style={styles.pointsEarnedText}>+{route.points} pts</Text>
                   </View>
                   <TouchableOpacity
-                    style={[
-                      styles.viewDetailsButton,
-                      isActionDisabled(route) && styles.viewDetailsButtonDisabled,
-                    ]}
-                    disabled={isActionDisabled(route)}
-                    onPress={() => handleRouteAction(route)}
+                    style={styles.viewDetailsButton}
+                    onPress={() => router.push({ pathname: '/route-details', params: { id: route.id } })}
                   >
-                    <Text
-                      style={[
-                        styles.viewDetailsText,
-                        isActionDisabled(route) && styles.viewDetailsTextDisabled,
-                      ]}
-                    >
-                      {getRouteActionLabel(route)}
-                    </Text>
+                    <Text style={styles.viewDetailsText}>View Details</Text>
                   </TouchableOpacity>
                 </View>
               </Card>
             ))}
           </ScrollView>
         </View>
-
-        {loading ? (
-          <View style={styles.loadingChip}>
-            <Text style={styles.loadingChipText}>Loading backend routes...</Text>
-          </View>
-        ) : null}
       </SafeAreaView>
     </View>
   );
@@ -346,15 +273,16 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#DCFCE7',
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: spacing.sm,
   },
   recenterButton: {
     width: 52,
     height: 52,
-    borderRadius: 26,
     backgroundColor: '#FFFFFF',
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -363,68 +291,101 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  customMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  markerLabelContainer: {
+    position: 'absolute',
+    top: -24,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  markerLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
   bottomSection: {
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.sm,
   },
   filterScroll: {
-    maxHeight: 56,
+    marginBottom: spacing.md,
   },
   filterScrollContent: {
     paddingHorizontal: spacing.md,
   },
   filterPillsContainer: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.xl,
+    padding: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 999,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 3,
+    borderRadius: radius.lg,
   },
   filterPillActive: {
-    backgroundColor: '#16A34A',
+    backgroundColor: '#14532D', // Dark green for active state per mockup
   },
   filterPillText: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#6B7280',
-    fontSize: 13,
-    fontWeight: '700',
   },
   filterPillTextActive: {
     color: '#FFFFFF',
   },
   cardsScrollContent: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.xs,
   },
   routeCard: {
     width: CARD_WIDTH,
     marginHorizontal: CARD_MARGIN,
-    gap: spacing.sm,
+    marginBottom: spacing.xs, // Shadow clearance
+    borderWidth: 2,
+    borderColor: 'transparent', // The active one is green in mock, setting up foundation
   },
   routeHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    alignItems: 'center',
+    marginBottom: spacing.xs,
   },
   routeTitle: {
-    flex: 1,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: 'bold',
     color: '#111827',
   },
   badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   badgeEasy: {
     backgroundColor: '#DCFCE7',
@@ -434,37 +395,44 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: 'bold',
   },
   badgeTextEasy: {
-    color: '#15803D',
+    color: '#16A34A',
   },
   badgeTextMedium: {
-    color: '#B45309',
+    color: '#D97706',
   },
   routeLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    marginBottom: spacing.md,
   },
   routeLocationText: {
-    color: '#6B7280',
+    color: '#9CA3AF',
     fontSize: 14,
+    marginLeft: 6,
   },
   routeStatsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   routeStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    marginRight: spacing.lg,
+  },
+  routeStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  routeStatIcon: {
+    marginRight: 0,
   },
   routeStatText: {
-    color: '#4B5563',
+    color: '#9CA3AF',
     fontSize: 13,
-    fontWeight: '600',
+    marginLeft: 6,
   },
   routeFooterRow: {
     flexDirection: 'row',
@@ -474,62 +442,22 @@ const styles = StyleSheet.create({
   pointsEarned: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
   },
   pointsEarnedText: {
     color: '#16A34A',
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 4,
   },
   viewDetailsButton: {
-    backgroundColor: '#14532D',
+    backgroundColor: '#111827',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 999,
-  },
-  viewDetailsButtonDisabled: {
-    backgroundColor: '#E5E7EB',
+    borderRadius: 10,
   },
   viewDetailsText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  viewDetailsTextDisabled: {
-    color: '#9CA3AF',
-  },
-  customMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  markerLabelContainer: {
-    marginTop: 6,
-    backgroundColor: '#111827',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  markerLabel: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  loadingChip: {
-    alignSelf: 'center',
-    backgroundColor: '#111827',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    marginBottom: spacing.md,
-  },
-  loadingChipText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
+    fontSize: 14,
+    fontWeight: 'bold',
+  }
 });

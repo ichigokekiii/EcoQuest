@@ -90,15 +90,11 @@ export default function RegisterScreen() {
         fullName: fullName.trim(),
         email: email.trim(),
       });
+
       router.replace('/(tabs)');
     } catch (error) {
       console.log('Register error:', error);
-      const message =
-        error.response?.data?.message ||
-        error.message ||
-        'Unable to create your account right now.';
-
-      Alert.alert('Registration failed', message);
+      Alert.alert('Registration failed', error.response?.data?.message || error.message || 'Unable to create your account right now.');
     } finally {
       setLoading(false);
     }

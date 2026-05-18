@@ -1,78 +1,101 @@
 import { useEffect, useState } from 'react';
-import { signOut } from 'firebase/auth';
 
+import Header from '../components/Header';
 import api from '../services/api';
-import { auth } from '../services/firebase';
 
 const summaryCards = [
-  { key: 'users', label: 'Users' },
-  { key: 'activeUsers', label: 'Active Users' },
-  { key: 'routes', label: 'Routes' },
-  { key: 'activeRoutes', label: 'Active Routes' },
-  { key: 'missions', label: 'Missions' },
-  { key: 'activeMissions', label: 'Active Missions' },
+  { key: 'users', label: 'Total Users', icon: 'users', tone: 'blue', delta: 'Community accounts' },
+  { key: 'activeRoutes', label: 'Active Routes', icon: 'route', tone: 'green', delta: 'Visible on mobile' },
+  { key: 'activeMissions', label: 'Active Missions', icon: 'mission', tone: 'yellow', delta: 'Cleanup goals' },
+  { key: 'trashSubmissions', label: 'Trash Submissions', icon: 'trash', tone: 'red', delta: 'Proof records' },
 ];
 
-const initialRouteForm = {
-  name: '',
-  description: '',
-  difficulty: 'easy',
-  status: 'active',
-  startLocationName: '',
-  endLocationName: '',
-  distanceKm: '1',
-  estimatedTimeMinutes: '20',
-  minimumTrashRequired: '3',
-  visualMaxGoal: '5',
-  basePoints: '100',
-  pointsPerTrash: '5',
-  bonusPointsPerExtraTrash: '3',
-};
+function formatTimestamp(value) {
+  if (!value) {
+    return 'Recent';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Recent';
+  }
+
+  return date.toLocaleString();
+}
+
+function SectionIcon({ name }) {
+  switch (name) {
+    case 'users':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm8 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-8 2c-3.9 0-7 2.2-7 5v1h14v-1c0-2.8-3.1-5-7-5Z" />
+        </svg>
+      );
+    case 'route':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 18a3 3 0 1 1 0-6h12a3 3 0 1 1 0 6H6Zm0-8a3 3 0 1 1 2.6-4.5h6.8A3 3 0 1 1 18 10H6Z" />
+        </svg>
+      );
+    case 'mission':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-8 13-4-4 1.4-1.4 2.6 2.6 5.6-5.6L18 9l-7 7Z" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M10 2h4l1 2h5v2H4V4h5l1-2Zm-4 6h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Z" />
+        </svg>
+      );
+  }
+}
 
 export default function DashboardPage({ currentUser }) {
   const [dashboard, setDashboard] = useState(null);
-  const [users, setUsers] = useState([]);
   const [routes, setRoutes] = useState([]);
-  const [routeForm, setRouteForm] = useState(initialRouteForm);
+  const [sessions, setSessions] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [savingRoute, setSavingRoute] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-
-  async function loadAdminData() {
-    setLoading(true);
-    setErrorMessage('');
-
-    const [dashboardResponse, usersResponse, routesResponse] = await Promise.all([
-      api.get('/admin/dashboard'),
-      api.get('/admin/users?limit=5'),
-      api.get('/admin/routes?limit=5'),
-    ]);
-
-    setDashboard(dashboardResponse.data);
-    setUsers(usersResponse.data.users || []);
-    setRoutes(routesResponse.data.routes || []);
-  }
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadInitialAdminData() {
+    async function loadAdminData() {
       try {
-        await loadAdminData();
+        setLoading(true);
+        setErrorMessage('');
+
+        const [
+          dashboardResponse,
+          routesResponse,
+          sessionsResponse,
+          submissionsResponse,
+        ] = await Promise.all([
+          api.get('/admin/dashboard'),
+          api.get('/admin/routes?limit=6'),
+          api.get('/admin/route-sessions?limit=6'),
+          api.get('/admin/trash-submissions?limit=6'),
+        ]);
 
         if (!isMounted) {
           return;
         }
+
+        setDashboard(dashboardResponse.data);
+        setRoutes(routesResponse.data.routes || []);
+        setSessions(sessionsResponse.data.sessions || []);
+        setSubmissions(submissionsResponse.data.submissions || []);
       } catch (error) {
-        if (!isMounted) {
-          return;
+        if (isMounted) {
+          setErrorMessage(
+            error.response?.data?.message ||
+              'Unable to load admin data. Make sure this Firebase user has the admin role.'
+          );
         }
-
-        setErrorMessage(
-          error.response?.data?.message ||
-            'Unable to load admin data. Make sure your account has the admin role.'
-        );
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -80,265 +103,153 @@ export default function DashboardPage({ currentUser }) {
       }
     }
 
-    loadInitialAdminData();
+    loadAdminData();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  function handleRouteFormChange(event) {
-    const { name, value } = event.target;
-
-    setRouteForm((currentForm) => ({
-      ...currentForm,
-      [name]: value,
-    }));
-  }
-
-  async function handleCreateRoute(event) {
-    event.preventDefault();
-    setSavingRoute(true);
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    try {
-      const response = await api.post('/admin/routes', routeForm);
-
-      setRoutes((currentRoutes) => [response.data.route, ...currentRoutes].slice(0, 5));
-      setRouteForm(initialRouteForm);
-      setSuccessMessage('Route saved to Firestore. Active routes will also appear in the mobile app.');
-      await loadAdminData();
-    } catch (error) {
-      setErrorMessage(error.response?.data?.message || 'Unable to create route.');
-    } finally {
-      setSavingRoute(false);
-      setLoading(false);
-    }
-  }
-
-  async function handleSignOut() {
-    await signOut(auth);
-  }
-
   const summary = dashboard?.summary || {};
 
-  return (
-    <main className="shell">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Shared Backend Admin</p>
-          <h1>Eco Quest Operations</h1>
-          <p className="muted">
-            Signed in as {dashboard?.admin?.fullName || currentUser.email}. This desktop app uses
-            the same backend as the mobile client, with stricter admin route protection.
-          </p>
-        </div>
+  if (loading) {
+    return <p className="loading-state">Synchronizing admin dashboard metrics...</p>;
+  }
 
-        <button className="button button--ghost" onClick={handleSignOut} type="button">
-          Sign out
-        </button>
-      </header>
+  return (
+    <section className="dashboard-page">
+      <Header
+        title="Dashboard"
+        subtitle={new Date().toLocaleDateString(undefined, {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        })}
+      />
 
       {errorMessage ? <p className="error">{errorMessage}</p> : null}
-      {successMessage ? <p className="success">{successMessage}</p> : null}
 
-      <section className="grid">
+      <section className="stats-grid" aria-label="Summary metrics">
         {summaryCards.map((card) => (
-          <article className="panel" key={card.key}>
-            <p className="muted">{card.label}</p>
-            <h2>{loading ? '...' : summary[card.key] ?? 0}</h2>
+          <article className="stat-card" key={card.key}>
+            <div className="stat-card-body">
+              <span className={`stat-icon ${card.tone}`}>
+                <SectionIcon name={card.icon} />
+              </span>
+              <div className="stat-card-content">
+                <strong>{summary[card.key] ?? 0}</strong>
+                <p>{card.label}</p>
+              </div>
+            </div>
+            <p className="stat-footnote">{card.delta}</p>
           </article>
         ))}
       </section>
 
-      <section className="panel route-form-panel">
-        <div className="panel__header">
-          <p className="eyebrow">Firestore Input Test</p>
-          <h2>Create cleanup route</h2>
-          <p className="muted">
-            This simple admin form writes through Express into the live Firestore `routes`
-            collection. Validation is intentionally light for now.
-          </p>
-        </div>
+      <section className="content-grid">
+        <article className="chart-card">
+          <div className="section-head">
+            <div>
+              <h2>Collection Trends</h2>
+              <p>Simple activity curve based on route sessions and trash submissions.</p>
+            </div>
+            <button className="ghost-link" type="button">
+              Generate Report
+            </button>
+          </div>
+          <div className="chart-panel">
+            <svg className="trend-chart" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(77, 133, 88, 0.36)" />
+                  <stop offset="100%" stopColor="rgba(77, 133, 88, 0.04)" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M0,100 L0,82 12,76 24,70 36,72 48,54 60,48 72,42 84,36 100,28 L100,100 Z"
+                fill="url(#trendFill)"
+              />
+              <polyline
+                points="0,82 12,76 24,70 36,72 48,54 60,48 72,42 84,36 100,28"
+                fill="none"
+                stroke="#15803d"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="3.5"
+              />
+            </svg>
+          </div>
+        </article>
 
-        <form className="route-form" onSubmit={handleCreateRoute}>
-          <label className="field">
-            <span>Route name</span>
-            <input
-              name="name"
-              onChange={handleRouteFormChange}
-              placeholder="Community Park Cleanup"
-              value={routeForm.name}
-            />
-          </label>
-
-          <label className="field field--wide">
-            <span>Description</span>
-            <input
-              name="description"
-              onChange={handleRouteFormChange}
-              placeholder="Short route description"
-              value={routeForm.description}
-            />
-          </label>
-
-          <label className="field">
-            <span>Difficulty</span>
-            <select name="difficulty" onChange={handleRouteFormChange} value={routeForm.difficulty}>
-              <option value="easy">easy</option>
-              <option value="medium">medium</option>
-              <option value="hard">hard</option>
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Status</span>
-            <select name="status" onChange={handleRouteFormChange} value={routeForm.status}>
-              <option value="active">active</option>
-              <option value="draft">draft</option>
-              <option value="archived">archived</option>
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Start location</span>
-            <input
-              name="startLocationName"
-              onChange={handleRouteFormChange}
-              placeholder="Main Gate"
-              value={routeForm.startLocationName}
-            />
-          </label>
-
-          <label className="field">
-            <span>End location</span>
-            <input
-              name="endLocationName"
-              onChange={handleRouteFormChange}
-              placeholder="Garden Area"
-              value={routeForm.endLocationName}
-            />
-          </label>
-
-          <label className="field">
-            <span>Distance km</span>
-            <input name="distanceKm" onChange={handleRouteFormChange} value={routeForm.distanceKm} />
-          </label>
-
-          <label className="field">
-            <span>Estimated minutes</span>
-            <input
-              name="estimatedTimeMinutes"
-              onChange={handleRouteFormChange}
-              value={routeForm.estimatedTimeMinutes}
-            />
-          </label>
-
-          <label className="field">
-            <span>Minimum trash</span>
-            <input
-              name="minimumTrashRequired"
-              onChange={handleRouteFormChange}
-              value={routeForm.minimumTrashRequired}
-            />
-          </label>
-
-          <label className="field">
-            <span>Visual max goal</span>
-            <input
-              name="visualMaxGoal"
-              onChange={handleRouteFormChange}
-              value={routeForm.visualMaxGoal}
-            />
-          </label>
-
-          <label className="field">
-            <span>Base points</span>
-            <input name="basePoints" onChange={handleRouteFormChange} value={routeForm.basePoints} />
-          </label>
-
-          <label className="field">
-            <span>Points per trash</span>
-            <input
-              name="pointsPerTrash"
-              onChange={handleRouteFormChange}
-              value={routeForm.pointsPerTrash}
-            />
-          </label>
-
-          <label className="field">
-            <span>Bonus points</span>
-            <input
-              name="bonusPointsPerExtraTrash"
-              onChange={handleRouteFormChange}
-              value={routeForm.bonusPointsPerExtraTrash}
-            />
-          </label>
-
-          <button className="button" disabled={savingRoute} type="submit">
-            {savingRoute ? 'Saving route...' : 'Save route to Firestore'}
-          </button>
-        </form>
+        <aside className="submissions-card">
+          <h2>Recent Submissions</h2>
+          <div className="submission-list">
+            {submissions.slice(0, 5).map((item) => (
+              <div className="submission-item" key={item.id}>
+                <div>
+                  <p className="submission-name">{item.userName || item.userId || 'EcoQuest User'}</p>
+                  <p className="submission-route">{item.routeName || item.routeId || 'Cleanup Route'}</p>
+                  <p className="submission-route">
+                    Final: {item.finalCategoryName || item.trashCategoryName || 'Uncategorized'}
+                    {' · '}
+                    AI: {item.aiSuggestedCategoryName || 'Not analyzed'}
+                    {item.categoryChangedByUser ? ' · user changed' : ''}
+                  </p>
+                </div>
+                <span className={`status-pill ${item.status === 'pending' ? 'verify' : 'approved'}`}>
+                  {item.status || 'auto_approved'}
+                </span>
+              </div>
+            ))}
+            {submissions.length === 0 ? <p className="muted">No trash submissions yet.</p> : null}
+          </div>
+        </aside>
       </section>
 
       <section className="content-grid">
-        <article className="panel">
-          <div className="panel__header">
+        <article className="data-card">
+          <div className="section-head">
             <div>
-              <p className="eyebrow">Users</p>
-              <h2>Recent accounts</h2>
+              <h2>Active Routes</h2>
+              <p>Routes managed by admin and consumed by mobile discovery.</p>
             </div>
           </div>
-
-          <div className="table">
-            <div className="table__head">
-              <span>Name</span>
-              <span>Role</span>
-              <span>Status</span>
-            </div>
-
-            {loading ? <p className="muted">Loading users...</p> : null}
-
-            {!loading &&
-              users.map((user) => (
-                <div className="table__row" key={user.id}>
-                  <span>{user.fullName || user.email || user.id}</span>
-                  <span>{user.role || 'user'}</span>
-                  <span>{user.status || 'unknown'}</span>
+          <div className="card-list">
+            {routes.slice(0, 5).map((route) => (
+              <div className="list-item" key={route.id}>
+                <div>
+                  <strong>{route.name || route.title}</strong>
+                  <p className="muted">{route.locationName || route.startLocation?.name || 'Route Start'}</p>
                 </div>
-              ))}
+                <span className={`status-chip ${route.status === 'draft' ? 'warning' : ''}`}>
+                  {route.status || 'active'}
+                </span>
+              </div>
+            ))}
           </div>
         </article>
 
-        <article className="panel">
-          <div className="panel__header">
+        <article className="data-card">
+          <div className="section-head">
             <div>
-              <p className="eyebrow">Routes</p>
-              <h2>Current cleanup routes</h2>
+              <h2>Recent Sessions</h2>
+              <p>Mobile cleanup attempts flowing through the shared backend.</p>
             </div>
           </div>
-
-          <div className="table">
-            <div className="table__head">
-              <span>Route</span>
-              <span>Difficulty</span>
-              <span>Status</span>
-            </div>
-
-            {loading ? <p className="muted">Loading routes...</p> : null}
-
-            {!loading &&
-              routes.map((route) => (
-                <div className="table__row" key={route.id}>
-                  <span>{route.title || route.name || route.id}</span>
-                  <span>{route.difficulty || 'Unknown'}</span>
-                  <span>{route.status || 'unknown'}</span>
+          <div className="card-list">
+            {sessions.slice(0, 5).map((session) => (
+              <div className="list-item" key={session.id}>
+                <div>
+                  <strong>{session.routeName || session.routeId}</strong>
+                  <p className="muted">{formatTimestamp(session.updatedAt || session.createdAt)}</p>
                 </div>
-              ))}
+                <span className="status-chip">{session.status}</span>
+              </div>
+            ))}
           </div>
         </article>
       </section>
-    </main>
+    </section>
   );
 }

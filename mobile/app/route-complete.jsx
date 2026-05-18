@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withDelay, withTiming } from 'react-native-reanimated';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { spacing, radius } from '../src/constants/theme';
 import Card from '../src/components/Card';
 
@@ -11,22 +12,57 @@ const { height: screenHeight } = Dimensions.get('window');
 export default function RouteCompleteScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
+
+  const routeName = params.routeName || 'Cleanup Route';
+  const duration = params.duration || 'Route complete';
+  const trashCollected = Number(params.trashCollected || 0);
+  const requiredTrashCount = Number(params.requiredTrashCount || 0);
+  const completedMissions = Number(params.completedMissions || 0);
+  const totalMissions = Number(params.totalMissions || 0);
+  const basePointsEarned = Number(params.basePointsEarned || 0);
+  const trashPointsEarned = Number(params.trashPointsEarned || 0);
+  const bonusPointsEarned = Number(params.bonusPointsEarned || 0);
+  const achievementBonusEarned = Number(params.achievementBonusEarned || 0);
+  const totalPointsEarned = Number(params.totalPointsEarned || 0);
+  const bonusItemsCollected = Math.max(trashCollected - requiredTrashCount, 0);
+
+  const checkmarkScale = useSharedValue(0);
+  const ringScale = useSharedValue(0);
+  const ringOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    // Pop the checkmark with a bouncy spring
+    checkmarkScale.value = withDelay(100, withSpring(1, { damping: 12, stiffness: 150 }));
+    // Fade and scale the glow rings
+    ringScale.value = withDelay(200, withSpring(1, { damping: 15, stiffness: 100 }));
+    ringOpacity.value = withDelay(200, withTiming(1, { duration: 400 }));
+  }, []);
+
+  const checkmarkStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkmarkScale.value }]
+  }));
+
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ringScale.value }],
+    opacity: ringOpacity.value
+  }));
 
   return (
     <View style={styles.container}>
       {/* Top Hero Section (Dark Green) */}
       <View style={[styles.heroSection, { paddingTop: insets.top + spacing.xl }]}>
         {/* Glowing Checkmark */}
-        <View style={styles.glowRingOuter}>
+        <Animated.View style={[styles.glowRingOuter, ringStyle]}>
           <View style={styles.glowRingInner}>
-            <View style={styles.checkCircle}>
+            <Animated.View style={[styles.checkCircle, checkmarkStyle]}>
               <Feather name="check" size={32} color="#16A34A" />
-            </View>
+            </Animated.View>
           </View>
-        </View>
+        </Animated.View>
 
         <Text style={styles.heroTitle}>Route Complete</Text>
-        <Text style={styles.heroSubtitle}>Riverside Cleanup · 34 min</Text>
+        <Text style={styles.heroSubtitle}>{routeName} · {duration}</Text>
       </View>
 
       {/* Bottom Content Section */}
@@ -39,19 +75,19 @@ export default function RouteCompleteScreen() {
           <View style={styles.statsRow}>
             <Card style={styles.statCard}>
               <Feather name="trash-2" size={24} color="#6B7280" style={styles.statIcon} />
-              <Text style={styles.statValue}>14</Text>
+              <Text style={styles.statValue}>{trashCollected}</Text>
               <Text style={styles.statLabel}>Trash</Text>
             </Card>
             
             <Card style={styles.statCard}>
               <Feather name="target" size={24} color="#6B7280" style={styles.statIcon} />
-              <Text style={styles.statValue}>2/3</Text>
+              <Text style={styles.statValue}>{completedMissions}/{totalMissions}</Text>
               <Text style={styles.statLabel}>Missions</Text>
             </Card>
 
             <Card style={styles.statCard}>
               <Feather name="clock" size={24} color="#6B7280" style={styles.statIcon} />
-              <Text style={styles.statValue}>34m</Text>
+              <Text style={styles.statValue}>{duration.replace(' min', 'm')}</Text>
               <Text style={styles.statLabel}>Time</Text>
             </Card>
           </View>
@@ -61,14 +97,14 @@ export default function RouteCompleteScreen() {
             <View style={styles.milestoneRow}>
               <Text style={styles.milestoneLabel}>Minimum reached</Text>
               <View style={styles.milestoneValueGroup}>
-                <Text style={styles.milestoneTarget}>10 / 10</Text>
+                <Text style={styles.milestoneTarget}>{trashCollected} / {requiredTrashCount}</Text>
                 <Feather name="check" size={16} color="#16A34A" />
               </View>
             </View>
             <View style={styles.divider} />
             <View style={styles.milestoneRow}>
               <Text style={styles.milestoneLabel}>Bonus items collected</Text>
-              <Text style={styles.milestoneBonus}>+4 extra</Text>
+              <Text style={styles.milestoneBonus}>+{bonusItemsCollected} extra</Text>
             </View>
           </Card>
 
@@ -81,15 +117,15 @@ export default function RouteCompleteScreen() {
                 <View style={[styles.dot, { backgroundColor: '#3B82F6' }]} />
                 <Text style={styles.pointsLabel}>Base Route</Text>
               </View>
-              <Text style={styles.pointsValue}>+50</Text>
+              <Text style={styles.pointsValue}>+{basePointsEarned}</Text>
             </View>
 
             <View style={styles.pointsRow}>
               <View style={styles.pointsLabelGroup}>
                 <View style={[styles.dot, { backgroundColor: '#16A34A' }]} />
-                <Text style={styles.pointsLabel}>Trash Collected (14×)</Text>
+                <Text style={styles.pointsLabel}>Trash Collected ({trashCollected}x)</Text>
               </View>
-              <Text style={styles.pointsValue}>+140</Text>
+              <Text style={styles.pointsValue}>+{trashPointsEarned}</Text>
             </View>
 
             <View style={styles.pointsRow}>
@@ -97,20 +133,33 @@ export default function RouteCompleteScreen() {
                 <View style={[styles.dot, { backgroundColor: '#F59E0B' }]} />
                 <Text style={styles.pointsLabel}>Mission Bonus</Text>
               </View>
-              <Text style={styles.pointsValue}>+80</Text>
+              <Text style={styles.pointsValue}>+{achievementBonusEarned}</Text>
+            </View>
+
+            <View style={styles.pointsRow}>
+              <View style={styles.pointsLabelGroup}>
+                <View style={[styles.dot, { backgroundColor: '#8B5CF6' }]} />
+                <Text style={styles.pointsLabel}>Extra Trash Bonus</Text>
+              </View>
+              <Text style={styles.pointsValue}>+{bonusPointsEarned}</Text>
+            </View>
+
+            <View style={[styles.pointsRow, styles.pointsRowTotal]}>
+              <Text style={styles.pointsTotalLabel}>Total Earned</Text>
+              <Text style={styles.pointsTotalValue}>+{totalPointsEarned}</Text>
             </View>
           </Card>
         </ScrollView>
 
         {/* Bottom Actions */}
         <View style={[styles.bottomActions, { paddingBottom: Math.max(insets.bottom, spacing.xl) }]}>
-          <TouchableOpacity style={styles.primaryButton}>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/(tabs)/store')}>
             <Text style={styles.primaryButtonText}>Visit Store</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.secondaryButton}
-            onPress={() => router.dismissAll()}
+            onPress={() => router.replace('/(tabs)')}
           >
             <Text style={styles.secondaryButtonText}>Back to Home</Text>
           </TouchableOpacity>
@@ -164,7 +213,8 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '900',
     color: '#FFFFFF',
-    marginBottom: spacing.xs,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
   heroSubtitle: {
     fontSize: 16,
@@ -266,6 +316,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+  pointsRowTotal: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
   pointsLabelGroup: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,6 +341,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  pointsTotalLabel: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  pointsTotalValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#14532D',
   },
   bottomActions: {
     position: 'absolute',

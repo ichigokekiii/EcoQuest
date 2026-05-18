@@ -1,9 +1,17 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 const iosMapsKey = process.env.GOOGLE_MAPS_IOS_API_KEY;
 const androidMapsKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
 
 if (!iosMapsKey || !androidMapsKey) {
   console.warn(
-    '[Eco Quest] Missing GOOGLE_MAPS_IOS_API_KEY or GOOGLE_MAPS_ANDROID_API_KEY in .env. ' +
+    '[Eco Quest] Missing GOOGLE_MAPS_IOS_API_KEY or GOOGLE_MAPS_ANDROID_API_KEY in root .env. ' +
       'Google Maps will not work until both are set and you run `npx expo prebuild`.'
   );
 }

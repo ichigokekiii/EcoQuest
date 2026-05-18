@@ -1,4 +1,4 @@
-require('dotenv').config({ quiet: true });
+require('../config/env');
 
 const { admin, getDb } = require('../config/firebaseAdmin');
 

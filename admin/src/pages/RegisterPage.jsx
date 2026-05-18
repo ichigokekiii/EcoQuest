@@ -1,8 +1,5 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-
-import { auth } from '../services/firebase';
 
 function AuthBrandPanel() {
   return (
@@ -16,24 +13,27 @@ function AuthBrandPanel() {
   );
 }
 
-export default function LoginPage() {
+export default function RegisterPage() {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
 
-  async function handleSubmit(event) {
+  function handleSubmit(event) {
     event.preventDefault();
-    setSubmitting(true);
     setErrorMessage('');
+    setInfoMessage('');
 
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-    } catch (error) {
-      setErrorMessage(error.message || 'Unable to sign in.');
-    } finally {
-      setSubmitting(false);
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
     }
+
+    setInfoMessage(
+      'Registration UI is ready. Backend account creation will be connected in a later pass.'
+    );
   }
 
   return (
@@ -42,10 +42,22 @@ export default function LoginPage() {
 
       <section className="auth-form-panel">
         <div className="auth-card">
-          <p className="auth-card-welcome">Welcome to Eco Quest</p>
-          <h1>Log into your Account</h1>
+          <p className="auth-card-welcome">Join Eco Quest</p>
+          <h1>Create your Account</h1>
 
           <form className="stack" onSubmit={handleSubmit}>
+            <label className="field">
+              <span>Full Name</span>
+              <input
+                autoComplete="name"
+                onChange={(event) => setFullName(event.target.value)}
+                placeholder="Jamie Santos"
+                required
+                type="text"
+                value={fullName}
+              />
+            </label>
+
             <label className="field">
               <span>Email</span>
               <input
@@ -61,24 +73,37 @@ export default function LoginPage() {
             <label className="field">
               <span>Password</span>
               <input
-                autoComplete="current-password"
+                autoComplete="new-password"
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="Enter your password"
+                placeholder="Create a password"
                 required
                 type="password"
                 value={password}
               />
             </label>
 
-            {errorMessage ? <p className="error">{errorMessage}</p> : null}
+            <label className="field">
+              <span>Confirm Password</span>
+              <input
+                autoComplete="new-password"
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Confirm your password"
+                required
+                type="password"
+                value={confirmPassword}
+              />
+            </label>
 
-            <button className="auth-submit" disabled={submitting} type="submit">
-              {submitting ? 'Signing in...' : 'Log In'}
+            {errorMessage ? <p className="error">{errorMessage}</p> : null}
+            {infoMessage ? <p className="success">{infoMessage}</p> : null}
+
+            <button className="auth-submit" type="submit">
+              Create Account
             </button>
           </form>
 
           <p className="auth-switch">
-            Need an account? <Link to="/register">Create one</Link>
+            Already have an account? <Link to="/login">Log in</Link>
           </p>
         </div>
 

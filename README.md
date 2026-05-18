@@ -401,13 +401,19 @@ npm run dev
 
 ## Environment Variables
 
-Each app should have its own environment file.
+Use a single environment file at the repo root:
 
 ```txt
-backend/.env
-mobile/.env
-admin/.env
+.env
 ```
+
+Copy the template once:
+
+```bash
+cp .env.example .env
+```
+
+Backend, mobile, and admin load from this root `.env` (see `backend/src/config/env.js`, `admin/vite.config.js`, and `mobile/app.config.js` / `mobile/metro.config.js`).
 
 Never commit `.env` files.
 

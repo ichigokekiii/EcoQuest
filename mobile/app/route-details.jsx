@@ -5,9 +5,11 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { colors, spacing, radius } from '../src/constants/theme';
 import Card from '../src/components/Card';
-import { getRouteById, startRouteSession } from '../src/services/api';
+import { getActiveRouteSession, getRouteById, getRouteMissions, startRouteSession } from '../src/services/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,8 +46,37 @@ export default function RouteDetailsScreen() {
 
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [missions, setMissions] = useState([]);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [starting, setStarting] = useState(false);
+
+  const SNAP_TOP = 0;
+  const SNAP_BOTTOM = height * 0.4; // Expose more of the map
+
+  const translateY = useSharedValue(SNAP_BOTTOM);
+  const context = useSharedValue({ y: 0 });
+
+  const gesture = Gesture.Pan()
+    .onStart(() => {
+      context.value = { y: translateY.value };
+    })
+    .onUpdate((event) => {
+      translateY.value = event.translationY + context.value.y;
+      if (translateY.value < -20) translateY.value = -20; // Soft clamp top
+    })
+    .onEnd((event) => {
+      let targetY = SNAP_TOP;
+      if (event.velocityY > 500 || translateY.value > SNAP_BOTTOM / 2) {
+        targetY = SNAP_BOTTOM;
+      }
+      translateY.value = withSpring(targetY, { damping: 20, stiffness: 250, mass: 0.5 });
+    });
+
+  const bottomSheetStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: Math.max(translateY.value, -10) }]
+    };
+  });
 
   useEffect(() => {
     if (id) fetchRouteDetails();
@@ -53,8 +84,13 @@ export default function RouteDetailsScreen() {
 
   const fetchRouteDetails = async () => {
     try {
-      const data = await getRouteById(id);
-      setRoute(normalizeRoute(data.route || data));
+      const [routeResponse, missionResponse] = await Promise.all([
+        getRouteById(id),
+        getRouteMissions(id),
+      ]);
+
+      setRoute(normalizeRoute(routeResponse.route || routeResponse));
+      setMissions(missionResponse.missions || []);
       setLoading(false);
     } catch (error) {
       console.log('Error fetching route details:', error);
@@ -135,13 +171,19 @@ export default function RouteDetailsScreen() {
       </View>
 
       {/* Bottom Sheet Content */}
-      <ScrollView
-        style={styles.sheetContainer}
-        contentContainerStyle={styles.sheetContent}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <Text style={styles.title}>{route.title}</Text>
+      <Animated.View style={[styles.sheetContainer, bottomSheetStyle]}>
+        <GestureDetector gesture={gesture}>
+          <View style={styles.dragArea}>
+            <View style={styles.sheetHandle} />
+          </View>
+        </GestureDetector>
+
+        <ScrollView
+          contentContainerStyle={[styles.sheetContent, { paddingBottom: 150 + SNAP_BOTTOM }]}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <Text style={styles.title}>{route.title}</Text>
         <View style={styles.locationRow}>
           <Feather name="map-pin" size={16} color="#9CA3AF" />
           <Text style={styles.locationText}>{route.locationName}</Text>
@@ -188,22 +230,34 @@ export default function RouteDetailsScreen() {
 
         {/* Available Missions */}
         <Text style={styles.sectionTitle}>Available Missions</Text>
-        <Card style={styles.missionCard}>
-          <View style={styles.missionHeaderRow}>
-            <View style={styles.iconCircleLight}>
-              <Feather name="target" size={20} color="#16A34A" />
-            </View>
-            <View style={styles.cardTextContent}>
-              <Text style={styles.missionTitle}>Plastic Patrol</Text>
-              <Text style={styles.missionSubtitle}>Collect 5 plastic bottles</Text>
-            </View>
-            <View style={styles.pointsWrapper}>
-              <Feather name="zap" size={14} color="#16A34A" />
-              <Text style={styles.pointsText}>+50</Text>
-            </View>
-          </View>
-        </Card>
-      </ScrollView>
+        {missions.length > 0 ? (
+          missions.slice(0, 3).map((mission) => (
+            <Card key={mission.id || mission.missionId} style={styles.missionCard}>
+              <View style={styles.missionHeaderRow}>
+                <View style={styles.iconCircleLight}>
+                  <Feather name="target" size={20} color="#16A34A" />
+                </View>
+                <View style={styles.cardTextContent}>
+                  <Text style={styles.missionTitle}>{mission.title}</Text>
+                  <Text style={styles.missionSubtitle}>
+                    Collect {mission.requiredTrashCount || mission.requiredCount || 0}{' '}
+                    {mission.trashCategoryName || 'items'}
+                  </Text>
+                </View>
+                <View style={styles.pointsWrapper}>
+                  <Feather name="zap" size={14} color="#16A34A" />
+                  <Text style={styles.pointsText}>+{mission.pointsReward || 0}</Text>
+                </View>
+              </View>
+            </Card>
+          ))
+        ) : (
+          <Card style={styles.missionCard}>
+            <Text style={styles.emptyMissionsText}>No active missions are linked to this route yet.</Text>
+          </Card>
+        )}
+        </ScrollView>
+      </Animated.View>
 
       {/* Fixed Bottom Button */}
       <View style={[styles.bottomActionContainer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
@@ -213,11 +267,31 @@ export default function RouteDetailsScreen() {
           onPress={async () => {
             try {
               setStarting(true);
-              await startRouteSession(route.id);
-              router.push({ pathname: '/active-route', params: { id: route.id } });
+              const response = await startRouteSession(route.id);
+              router.push({
+                pathname: '/active-route',
+                params: { id: route.id, sessionId: response.session?.id },
+              });
             } catch (error) {
               console.log('Error starting route session:', error);
-              router.push({ pathname: '/active-route', params: { id: route.id } });
+
+              if (error.response?.status === 409) {
+                try {
+                  const activeResponse = await getActiveRouteSession();
+
+                  if (activeResponse.session?.id) {
+                    router.push({
+                      pathname: '/active-route',
+                      params: {
+                        id: activeResponse.session.routeId || route.id,
+                        sessionId: activeResponse.session.id,
+                      },
+                    });
+                  }
+                } catch (activeError) {
+                  console.log('Error loading active session after conflict:', activeError);
+                }
+              }
             } finally {
               setStarting(false);
             }
@@ -236,8 +310,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   mapContainer: {
-    height: height * 0.4,
-    position: 'relative',
+    ...StyleSheet.absoluteFillObject,
   },
   startMarker: {
     width: 14,
@@ -340,15 +413,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   sheetContainer: {
-    flex: 1,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: height * 0.85, // Takes up 85% of screen when fully expanded
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    marginTop: -24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 50,
+  },
+  dragArea: {
+    width: '100%',
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#D1D5DB',
   },
   sheetContent: {
-    padding: spacing.xl,
-    paddingBottom: 100,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 150, // Space for fixed button
   },
   title: {
     fontSize: 28,
@@ -449,6 +542,11 @@ const styles = StyleSheet.create({
   },
   missionCard: {
     marginBottom: spacing.lg,
+  },
+  emptyMissionsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   missionHeaderRow: {
     flexDirection: 'row',

@@ -8,8 +8,11 @@ const {
   getRouteSessionById,
   getRouteSessionHistory,
 } = require('../controllers/routeSessionController');
+const { verifyFirebaseToken, authMiddleware } = require('../middleware/authMiddleware');
 
 const router = express.Router();
+
+router.use(verifyFirebaseToken, authMiddleware);
 
 router.get('/active', getActiveRouteSession);
 router.get('/history', getRouteSessionHistory);

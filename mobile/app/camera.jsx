@@ -1,14 +1,83 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { spacing } from '../src/constants/theme';
+import { setPendingTrashPhoto } from '../src/utils/pendingTrashPhoto';
 
 const { width } = Dimensions.get('window');
 
 export default function CameraScannerScreen() {
   const router = useRouter();
+  const { id, sessionId } = useLocalSearchParams();
+  const [capturing, setCapturing] = useState(false);
+
+  async function handleImageResult(result) {
+    if (result.canceled || !result.assets?.[0]?.uri) {
+      return;
+    }
+
+    setPendingTrashPhoto(result.assets[0]);
+
+    router.push({
+      pathname: '/trash-confirm',
+      params: {
+        id,
+        sessionId,
+        imageUri: result.assets[0].uri,
+      },
+    });
+  }
+
+  async function openCamera() {
+    try {
+      setCapturing(true);
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert('Camera access needed', 'Please allow camera access to take a trash photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      await handleImageResult(result);
+    } catch (error) {
+      Alert.alert('Camera unavailable', 'Unable to open the camera right now. Try the gallery instead.');
+    } finally {
+      setCapturing(false);
+    }
+  }
+
+  async function openGallery() {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert('Photo library access needed', 'Please allow photo library access to choose an image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      await handleImageResult(result);
+    } catch (error) {
+      Alert.alert('Gallery unavailable', 'Unable to open the photo library right now.');
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -41,23 +110,26 @@ export default function CameraScannerScreen() {
       <SafeAreaView edges={['bottom']} style={styles.bottomControls}>
         <View style={styles.controlsRow}>
           {/* Left: Gallery */}
-          <TouchableOpacity style={styles.sideButton}>
+          <TouchableOpacity style={styles.sideButton} onPress={openGallery}>
             <Feather name="image" size={28} color="#FFFFFF" />
           </TouchableOpacity>
 
           {/* Center: Snap Button */}
           <TouchableOpacity 
             style={styles.snapButtonOuter}
-            onPress={() => router.push('/trash-confirm')}
+            onPress={openCamera}
           >
             <View style={styles.snapButtonInner} />
           </TouchableOpacity>
 
           {/* Right: Camera Flip */}
-          <TouchableOpacity style={styles.sideButton}>
+          <TouchableOpacity style={styles.sideButton} onPress={openCamera} disabled={capturing}>
             <Feather name="refresh-ccw" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
+        <Text style={styles.helperText}>
+          {capturing ? 'Opening camera...' : 'Use camera or choose from your gallery'}
+        </Text>
       </SafeAreaView>
     </View>
   );
@@ -169,6 +241,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  helperText: {
+    color: '#D1D5DB',
+    textAlign: 'center',
+    marginTop: spacing.md,
+    fontSize: 13,
   },
   sideButton: {
     width: 50,

@@ -12,7 +12,7 @@ This app is separate from the Expo mobile client and talks to the shared Express
    npm install
    ```
 
-2. Create `.env` from `.env.example`
+2. Copy the repo root env template: `cp ../.env.example ../.env` (from the EcoQuest repo root)
 
 3. Start the app
 

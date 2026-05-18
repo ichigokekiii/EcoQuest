@@ -11,11 +11,13 @@ const storeRoutes = require('./routes/storeRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const devRoutes = require('./routes/devRoutes');
+const trashCategoryRoutes = require('./routes/trashCategoryRoutes');
+const trashSubmissionRoutes = require('./routes/trashSubmissionRoutes');
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/', (req, res) => {
   res.json({ message: 'Eco Quest API is running' });
@@ -36,6 +38,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/routes', routeRoutes);
 app.use('/api/route-sessions', routeSessionRoutes);
 app.use('/api/missions', missionRoutes);
+app.use('/api/trash-categories', trashCategoryRoutes);
+app.use('/api/trash-submissions', trashSubmissionRoutes);
 app.use('/api/store', storeRoutes);
 app.use('/api/profile', profileRoutes);
 

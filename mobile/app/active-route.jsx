@@ -8,7 +8,13 @@ import MapViewDirections from 'react-native-maps-directions';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { spacing, radius } from '../src/constants/theme';
-import { getRouteById } from '../src/services/api';
+import {
+  finishRouteSession,
+  getActiveRouteSession,
+  getRouteById,
+  getRouteMissions,
+  getRouteSessionById,
+} from '../src/services/api';
 
 const { height, width } = Dimensions.get('window');
 
@@ -19,7 +25,7 @@ const GOOGLE_DIRECTIONS_APIKEY =
     : process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY);
 
 const SNAP_TOP = 0;
-const SNAP_BOTTOM = 220; // Increased to ensure the inner buttons are pushed off-screen and lower the card slightly
+const SNAP_BOTTOM = 180; // Collapsed snap: show progress labels above fixed bottom button; hide in-card actions
 
 function normalizeRoute(route) {
   const firstCoordinate = route.coordinates?.[0];
@@ -38,12 +44,15 @@ function normalizeRoute(route) {
 
 export default function ActiveRouteScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, sessionId, refresh } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
 
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
+  const [session, setSession] = useState(null);
+  const [routeMissions, setRouteMissions] = useState([]);
+  const [finishing, setFinishing] = useState(false);
 
   // Reanimated Bottom Sheet State
   const translateY = useSharedValue(0);
@@ -76,34 +85,77 @@ export default function ActiveRouteScreen() {
     const isCollapsed = translateY.value > SNAP_BOTTOM / 2;
     return {
       opacity: withTiming(isCollapsed ? 1 : 0, { duration: 150 }),
-      transform: [{ translateY: withTiming(isCollapsed ? 0 : 20, { duration: 150 }) }],
+      transform: [{ translateY: withTiming(isCollapsed ? 0 : 150, { duration: 150 }) }],
       // Prevent pointer events when hidden by setting zIndex dynamically
-      zIndex: isCollapsed ? 50 : -1,
+      zIndex: isCollapsed ? 150 : -1,
     };
   });
 
   useEffect(() => {
-    if (id) fetchRouteDetails();
-  }, [id]);
+    fetchActiveRouteState();
+  }, [id, sessionId, refresh]);
 
-  const fetchRouteDetails = async () => {
+  const fetchActiveRouteState = async () => {
     try {
-      const data = await getRouteById(id);
-      setRoute(normalizeRoute(data.route || data));
+      setLoading(true);
+      const sessionResponse = sessionId
+        ? await getRouteSessionById(sessionId)
+        : await getActiveRouteSession();
+      const resolvedSession = sessionResponse.session || null;
+
+      if (!resolvedSession) {
+        setSession(null);
+        setRoute(null);
+        setRouteMissions([]);
+        setLoading(false);
+        return;
+      }
+
+      const routeId = resolvedSession.routeId || id;
+      const [routeResponse, missionsResponse] = await Promise.all([
+        getRouteById(routeId),
+        getRouteMissions(routeId),
+      ]);
+
+      setSession(resolvedSession);
+      setRouteCoordinates([]);
+      setRoute(normalizeRoute(routeResponse.route || routeResponse));
+      setRouteMissions(missionsResponse.missions || []);
       setLoading(false);
     } catch (error) {
-      console.log('Error fetching route details:', error);
+      console.log('Error fetching active route state:', error);
       setLoading(false);
     }
   };
 
-  if (loading || !route) {
+  if (loading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#16A34A" />
       </View>
     );
   }
+
+  if (!session || !route) {
+    return (
+      <View style={[styles.container, styles.emptyStateContainer]}>
+        <Feather name="map" size={40} color="#16A34A" />
+        <Text style={styles.emptyStateTitle}>No active route session</Text>
+        <Text style={styles.emptyStateText}>
+          Start a cleanup route from the map tab to track your progress here.
+        </Text>
+        <TouchableOpacity style={styles.addPhotoButton} onPress={() => router.replace('/(tabs)/map')}>
+          <Text style={styles.addPhotoText}>Browse Routes</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const trashTarget = route.targetTrash || route.minimumTrashRequired || session.requiredTrashCount || 0;
+  const progressPercent = trashTarget > 0 ? Math.min((session.approvedTrashCount / trashTarget) * 100, 100) : 0;
+  const canFinish = session.approvedTrashCount >= session.requiredTrashCount;
+  const draftPoints = session.approvedTrashCount * 5;
+  const missionProgress = session.missionProgress || [];
 
   return (
     <View style={styles.container}>
@@ -176,15 +228,19 @@ export default function ActiveRouteScreen() {
               <Text style={styles.distanceTextUnit}> left</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.quitIconButton} onPress={() => router.push('/route-complete')}>
+          <TouchableOpacity style={styles.quitIconButton} onPress={() => router.replace('/(tabs)/map')}>
             <Feather name="log-out" size={24} color="#EF4444" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
 
-      {/* Separate Pop-up Button for Collapsed State */}
-      <Animated.View style={[styles.popupContainer, popupStyle]}>
-        <TouchableOpacity style={styles.addPhotoButton} activeOpacity={0.8} onPress={() => router.push({ pathname: '/camera', params: { id: route.id } })}>
+      {/* Fixed Bottom Button (Visible only when swiped down) */}
+      <Animated.View style={[styles.bottomActionContainer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }, popupStyle]}>
+        <TouchableOpacity
+          style={styles.addPhotoButton}
+          activeOpacity={0.8}
+          onPress={() => router.push({ pathname: '/camera', params: { id: route.id, sessionId: session.id } })}
+        >
           <Feather name="camera" size={20} color="#FFFFFF" style={styles.cameraIcon} />
           <Text style={styles.addPhotoText}>Add Trash Photo</Text>
         </TouchableOpacity>
@@ -210,36 +266,111 @@ export default function ActiveRouteScreen() {
               <View>
                 <Text style={styles.sheetSubtitle}>TRASH COLLECTED</Text>
                 <View style={styles.countRow}>
-                  <Text style={styles.largeCount}>0</Text>
-                  <Text style={styles.subCount}>/ {route.targetTrash || route.minimumTrashRequired || 0}</Text>
+                  <Text style={styles.largeCount}>{session.approvedTrashCount}</Text>
+                  <Text style={styles.subCount}>/ {trashTarget}</Text>
                 </View>
               </View>
               <View style={styles.pointsTextContainer}>
-                <Text style={styles.pointsNumberText}>+0 </Text>
+                <Text style={styles.pointsNumberText}>+{draftPoints} </Text>
                 <Text style={styles.pointsUnitText}>pts</Text>
               </View>
             </View>
 
             <View style={styles.progressContainer}>
               <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: '0%' }]} />
+                <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
               </View>
               <View style={styles.progressLabels}>
-                <Text style={styles.progressLabelText}>0</Text>
-                <Text style={styles.progressLabelActive}>Goal: {route.targetTrash || route.minimumTrashRequired || 0}</Text>
+                <Text style={styles.progressLabelText}>{session.approvedTrashCount}</Text>
+                <Text style={styles.progressLabelActive}>Goal: {trashTarget}</Text>
               </View>
             </View>
 
             {/* Below items are hidden when collapsed */}
-            <Text style={styles.unlockGrayText}>Collect {route.targetTrash || route.minimumTrashRequired || 0} trash to complete the route</Text>
+            <Text style={styles.unlockGrayText}>
+              {canFinish
+                ? 'Minimum requirement reached. You can finish now or keep collecting for bonus points.'
+                : `Collect ${Math.max(session.requiredTrashCount - session.approvedTrashCount, 0)} more trash to complete the route.`}
+            </Text>
 
-            <TouchableOpacity style={styles.addPhotoButton} onPress={() => router.push({ pathname: '/camera', params: { id: route.id } })}>
+            {missionProgress.length > 0 && (
+              <View style={styles.missionProgressList}>
+                {missionProgress.map((mission) => (
+                  <View key={mission.missionId} style={styles.missionProgressItem}>
+                    <View style={styles.missionProgressTextGroup}>
+                      <Text style={styles.missionProgressTitle}>{mission.title}</Text>
+                      <Text style={styles.missionProgressSubtitle}>
+                        {mission.currentCount} / {mission.requiredCount}
+                      </Text>
+                    </View>
+                    <Feather
+                      name={mission.isCompleted ? 'check-circle' : 'circle'}
+                      size={18}
+                      color={mission.isCompleted ? '#16A34A' : '#D1D5DB'}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {routeMissions.length > 0 && missionProgress.length === 0 && (
+              <View style={styles.missionProgressList}>
+                {routeMissions.slice(0, 3).map((mission) => (
+                  <View key={mission.id} style={styles.missionProgressItem}>
+                    <View style={styles.missionProgressTextGroup}>
+                      <Text style={styles.missionProgressTitle}>{mission.title}</Text>
+                      <Text style={styles.missionProgressSubtitle}>
+                        Collect {mission.requiredTrashCount || 0} {mission.trashCategoryName || 'items'}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.addPhotoButton}
+              onPress={() => router.push({ pathname: '/camera', params: { id: route.id, sessionId: session.id } })}
+            >
               <Feather name="camera" size={20} color="#FFFFFF" style={styles.cameraIcon} />
               <Text style={styles.addPhotoText}>Add Trash Photo</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.finishButtonDisabled} disabled>
-              <Text style={styles.finishButtonTextDisabled}>Finish Route</Text>
+            <TouchableOpacity
+              style={[styles.finishButtonDisabled, canFinish && styles.finishButtonActive]}
+              disabled={!canFinish || finishing}
+              onPress={async () => {
+                try {
+                  setFinishing(true);
+                  const response = await finishRouteSession(session.id);
+                  router.replace({
+                    pathname: '/route-complete',
+                    params: {
+                      id: route.id,
+                      sessionId: response.session?.id || session.id,
+                      routeName: response.session?.routeName || route.title,
+                      trashCollected: String(response.session?.approvedTrashCount || 0),
+                      requiredTrashCount: String(response.session?.requiredTrashCount || 0),
+                      completedMissions: String(response.summary?.completedMissions || 0),
+                      totalMissions: String((response.session?.missionProgress || []).length),
+                      duration: route.duration,
+                      basePointsEarned: String(response.summary?.basePointsEarned || 0),
+                      trashPointsEarned: String(response.summary?.trashPointsEarned || 0),
+                      bonusPointsEarned: String(response.summary?.bonusPointsEarned || 0),
+                      achievementBonusEarned: String(response.summary?.achievementBonusEarned || 0),
+                      totalPointsEarned: String(response.summary?.totalPointsEarned || 0),
+                    },
+                  });
+                } catch (error) {
+                  console.log('Error finishing route session:', error);
+                } finally {
+                  setFinishing(false);
+                }
+              }}
+            >
+              <Text style={[styles.finishButtonTextDisabled, canFinish && styles.finishButtonTextActive]}>
+                {finishing ? 'Finishing...' : 'Finish Route'}
+              </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -252,6 +383,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  emptyStateContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    gap: spacing.md,
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  emptyStateText: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.md,
   },
   userLocationOuter: {
     width: 32,
@@ -337,13 +486,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
-  },
-  popupContainer: {
-    position: 'absolute',
-    bottom: 215, // Lowered to sit closer to the swipeable card
-    left: spacing.xl,
-    right: spacing.xl,
-    elevation: 40,
   },
   bottomSheet: {
     position: 'absolute',
@@ -455,6 +597,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.xl,
   },
+  missionProgressList: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  missionProgressItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  missionProgressTextGroup: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  missionProgressTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  missionProgressSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
   addPhotoButton: {
     backgroundColor: '#16A34A',
     flexDirection: 'row',
@@ -483,9 +651,28 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
   },
+  finishButtonActive: {
+    backgroundColor: '#14532D',
+  },
   finishButtonTextDisabled: {
     color: '#9CA3AF',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  finishButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  bottomActionContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    elevation: 60,
+    zIndex: 150,
   }
 });

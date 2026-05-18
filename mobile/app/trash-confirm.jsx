@@ -1,21 +1,133 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { spacing, radius } from '../src/constants/theme';
-
-const CATEGORIES = ['Plastic', 'Paper', 'Glass', 'Metal', 'Organic', 'Mixed', 'Hazardous'];
+import CategorySuggestionCard from '../src/components/CategorySuggestionCard';
+import EcoQuestChatBubble from '../src/components/EcoQuestChatBubble';
+import { analyzeTrashPhoto, confirmTrash, getTrashCategories } from '../src/services/api';
+import { clearPendingTrashPhoto, getPendingTrashPhoto } from '../src/utils/pendingTrashPhoto';
 
 export default function TrashConfirmScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
-  const [selectedCategory, setSelectedCategory] = useState('Plastic');
+  const { id, sessionId, imageUri } = useLocalSearchParams();
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [isSuccessModalVisible, setSuccessModalVisible] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [pointsEarned, setPointsEarned] = useState(0);
+  const [canFinishRoute, setCanFinishRoute] = useState(false);
+  const [photoAsset] = useState(() => getPendingTrashPhoto());
+
+  const displayImageUri = imageUri || photoAsset?.uri;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCategoriesAndSuggestion() {
+      try {
+        setCategoriesLoading(true);
+        const categoriesResponse = await getTrashCategories();
+        const activeCategories = categoriesResponse.categories || [];
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCategories(activeCategories);
+        setSelectedCategory((currentCategory) => currentCategory || activeCategories[0] || null);
+        setCategoriesLoading(false);
+
+        if (!sessionId || !displayImageUri) {
+          return;
+        }
+
+        setAnalyzing(true);
+        const analysisResponse = await analyzeTrashPhoto({
+          sessionId,
+          imageUri: displayImageUri,
+          imageFileName: photoAsset?.fileName || null,
+          imageMimeType: photoAsset?.mimeType || null,
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        setAiSuggestion(analysisResponse.suggestion || null);
+      } catch (error) {
+        console.log('Error loading trash categories or AI suggestion:', error);
+        if (isMounted) {
+          setCategoriesLoading(false);
+        }
+      } finally {
+        if (isMounted) {
+          setAnalyzing(false);
+        }
+      }
+    }
+
+    loadCategoriesAndSuggestion();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [displayImageUri, photoAsset?.fileName, photoAsset?.mimeType, sessionId]);
 
   const incrementQuantity = () => setQuantity(prev => prev + 1);
   const decrementQuantity = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
+
+  async function handleSubmit() {
+    if (!sessionId) {
+      Alert.alert('Missing session', 'Start a route session before submitting trash.');
+      return;
+    }
+
+    if (!selectedCategory) {
+      Alert.alert('Choose a category', 'Please select an active trash category before submitting.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await confirmTrash(
+        sessionId,
+        selectedCategory.id,
+        quantity,
+        displayImageUri,
+        selectedCategory.name,
+        {
+          imageBase64: photoAsset?.base64 || null,
+          imageMimeType: photoAsset?.mimeType || null,
+          imageFileName: photoAsset?.fileName || null,
+          aiSuggestedCategoryId: aiSuggestion?.suggestedCategoryId || null,
+          aiSuggestedCategoryName: aiSuggestion?.suggestedCategoryName || null,
+          aiConfidence: aiSuggestion?.confidence ?? null,
+          aiReason: aiSuggestion?.reason || null,
+          aiNeedsReview: Boolean(aiSuggestion?.needsReview),
+        }
+      );
+
+      const pointsPreview = quantity * 5;
+      setPointsEarned(pointsPreview);
+      setCanFinishRoute(Boolean(response.canFinish));
+      clearPendingTrashPhoto();
+      setSuccessModalVisible(true);
+    } catch (error) {
+      console.log('Error confirming trash:', error);
+      Alert.alert(
+        'Submission failed',
+        error.response?.data?.message || 'Unable to save this trash submission right now.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -23,7 +135,13 @@ export default function TrashConfirmScreen() {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
-          onPress={() => router.replace(id ? { pathname: '/active-route', params: { id } } : '/active-route')}
+          onPress={() =>
+            router.replace(
+              id
+                ? { pathname: '/active-route', params: { id, sessionId, refresh: Date.now().toString() } }
+                : '/active-route'
+            )
+          }
         >
           <Feather name="chevron-left" size={24} color="#111827" />
         </TouchableOpacity>
@@ -39,8 +157,12 @@ export default function TrashConfirmScreen() {
         {/* Captured Photo */}
         <Text style={styles.sectionTitle}>Captured Photo</Text>
         <View style={styles.photoContainer}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?q=80&w=1000&auto=format&fit=crop' }} 
+          <Image
+            source={{
+              uri:
+                displayImageUri ||
+                'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?q=80&w=1000&auto=format&fit=crop',
+            }}
             style={styles.photo}
           />
           <View style={styles.photoCheckmark}>
@@ -48,26 +170,47 @@ export default function TrashConfirmScreen() {
           </View>
         </View>
 
+        <CategorySuggestionCard
+          loading={analyzing}
+          suggestion={aiSuggestion}
+          onAccept={() => {
+            const suggestedCategory = categories.find(
+              (category) => category.id === aiSuggestion?.suggestedCategoryId
+            );
+
+            if (suggestedCategory) {
+              setSelectedCategory(suggestedCategory);
+            }
+          }}
+        />
+
         {/* Trash Category */}
         <Text style={styles.sectionTitle}>Trash Category</Text>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.categoriesScroll}
-          contentContainerStyle={styles.categoriesContent}
-        >
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity 
-              key={cat}
-              style={[styles.categoryPill, selectedCategory === cat && styles.categoryPillActive]}
-              onPress={() => setSelectedCategory(cat)}
-            >
-              <Text style={[styles.categoryText, selectedCategory === cat && styles.categoryTextActive]}>
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {categoriesLoading ? (
+          <View style={styles.loadingCategories}>
+            <ActivityIndicator color="#16A34A" />
+            <Text style={styles.loadingCategoriesText}>Loading active categories...</Text>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoriesScroll}
+            contentContainerStyle={styles.categoriesContent}
+          >
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                style={[styles.categoryPill, selectedCategory?.id === cat.id && styles.categoryPillActive]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                <Text style={[styles.categoryText, selectedCategory?.id === cat.id && styles.categoryTextActive]}>
+                  {cat.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Quantity */}
         <Text style={styles.sectionTitle}>Quantity</Text>
@@ -89,11 +232,12 @@ export default function TrashConfirmScreen() {
       {/* Bottom Actions */}
       <View style={styles.bottomActions}>
         <TouchableOpacity 
-          style={styles.submitButton}
-          onPress={() => setSuccessModalVisible(true)}
+          style={[styles.submitButton, (!selectedCategory || submitting) && styles.submitButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={!selectedCategory || submitting}
         >
           <Feather name="check" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.submitButtonText}>Submit Trash</Text>
+          <Text style={styles.submitButtonText}>{submitting ? 'Submitting...' : 'Submit Trash'}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.retakeButton} onPress={() => router.back()}>
@@ -110,17 +254,37 @@ export default function TrashConfirmScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <View style={styles.modalIconContainer}>
-              <Feather name="check" size={40} color="#16A34A" />
-            </View>
-            <Text style={styles.modalTitle}>Trash Confirmed!</Text>
-            <Text style={styles.modalSubtitle}>+50 pts added to your total</Text>
-            
-            <TouchableOpacity 
+            <EcoQuestChatBubble
+              style={styles.modalChatBubble}
+              headline="Trash confirmed!"
+              footer={
+                <>
+                  <View style={styles.pointsRow}>
+                    <Feather name="zap" size={16} color="#16A34A" />
+                    <Text style={styles.pointsText}>+{pointsEarned} pts tracked</Text>
+                  </View>
+                  <Text style={styles.statusText}>
+                    {canFinishRoute
+                      ? 'Minimum requirement reached.'
+                      : 'Keep collecting to finish the route.'}
+                  </Text>
+                </>
+              }
+              showAction={false}
+            />
+
+            <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
                 setSuccessModalVisible(false);
-                router.replace(id ? { pathname: '/active-route', params: { id } } : '/active-route');
+                router.replace(
+                  id
+                    ? {
+                        pathname: '/active-route',
+                        params: { id, sessionId, refresh: Date.now().toString() },
+                      }
+                    : '/active-route'
+                );
               }}
             >
               <Text style={styles.modalButtonText}>Return to Route</Text>
@@ -215,6 +379,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     gap: spacing.sm,
   },
+  loadingCategories: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  loadingCategoriesText: {
+    color: '#6B7280',
+    marginLeft: spacing.sm,
+    fontWeight: '600',
+  },
   categoryPill: {
     paddingHorizontal: 20,
     paddingVertical: 10,
@@ -291,6 +465,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+  submitButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+  },
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
@@ -317,7 +494,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: radius.xl,
     padding: spacing.xl,
-    alignItems: 'center',
     width: '100%',
     maxWidth: 340,
     shadowColor: '#000',
@@ -326,25 +502,24 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 20,
   },
-  modalIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#DCFCE7', // Light green bg
-    justifyContent: 'center',
-    alignItems: 'center',
+  modalChatBubble: {
     marginBottom: spacing.lg,
   },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#111827',
-    marginBottom: spacing.xs,
+  pointsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  modalSubtitle: {
-    fontSize: 16,
+  pointsText: {
+    color: '#16A34A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  statusText: {
     color: '#6B7280',
-    marginBottom: spacing.xl,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.xs,
   },
   modalButton: {
     backgroundColor: '#16A34A',

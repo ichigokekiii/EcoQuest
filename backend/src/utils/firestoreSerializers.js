@@ -23,6 +23,26 @@ function mapRoutePathToCoordinates(path = []) {
   }));
 }
 
+function buildFallbackCoordinates(route) {
+  const coordinates = [];
+
+  if (route.startLocation?.lat != null && route.startLocation?.lng != null) {
+    coordinates.push({
+      latitude: route.startLocation.lat,
+      longitude: route.startLocation.lng,
+    });
+  }
+
+  if (route.endLocation?.lat != null && route.endLocation?.lng != null) {
+    coordinates.push({
+      latitude: route.endLocation.lat,
+      longitude: route.endLocation.lng,
+    });
+  }
+
+  return coordinates;
+}
+
 function buildRouteMarkers(route) {
   const markers = [];
 
@@ -75,6 +95,9 @@ function serializeDoc(doc) {
 
 function serializeRoute(doc) {
   const route = serializeDoc(doc);
+  const coordinates = route.path?.length
+    ? mapRoutePathToCoordinates(route.path)
+    : buildFallbackCoordinates(route);
 
   return {
     ...route,
@@ -85,7 +108,7 @@ function serializeRoute(doc) {
     minTrash: `Min ${route.minimumTrashRequired}`,
     targetTrash: route.minimumTrashRequired,
     points: route.basePoints,
-    coordinates: mapRoutePathToCoordinates(route.path),
+    coordinates,
     centerRegion: buildCenterRegion(route),
     markers: buildRouteMarkers(route),
   };

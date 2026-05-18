@@ -39,8 +39,18 @@ export async function getRouteById(routeId) {
   return response.data;
 }
 
+export async function getRouteMissions(routeId) {
+  const response = await api.get(`/missions/route/${routeId}`);
+  return response.data;
+}
+
 export async function getActiveRouteSession() {
   const response = await api.get('/route-sessions/active');
+  return response.data;
+}
+
+export async function getRouteSessionById(sessionId) {
+  const response = await api.get(`/route-sessions/${sessionId}`);
   return response.data;
 }
 
@@ -54,9 +64,30 @@ export async function getMissionsData() {
   return response.data;
 }
 
-export async function confirmTrash(sessionId, finalCategoryId = 'cat-plastic') {
+export async function getTrashCategories() {
+  const response = await api.get('/trash-categories');
+  return response.data;
+}
+
+export async function analyzeTrashPhoto(payload) {
+  const response = await api.post('/trash-submissions/analyze', payload);
+  return response.data;
+}
+
+export async function confirmTrash(
+  sessionId,
+  finalCategoryId = 'plastic',
+  quantity = 1,
+  imageUri = null,
+  finalCategoryName = null,
+  extraPayload = {}
+) {
   const response = await api.post(`/route-sessions/${sessionId}/confirm-trash`, {
+    ...extraPayload,
     finalCategoryId,
+    finalCategoryName,
+    imageUri,
+    quantity,
   });
   return response.data;
 }

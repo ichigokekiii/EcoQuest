@@ -179,7 +179,7 @@ function createInitialState() {
       routeId: 'route-1',
       title: 'Collect 5 plastic bottles',
       requiredTrashCount: 5,
-      trashCategoryId: 'cat-plastic',
+      trashCategoryId: 'plastic',
       trashCategoryName: 'Plastic',
       pointsReward: 20,
       status: 'active',
@@ -197,9 +197,13 @@ function createInitialState() {
   ];
 
   const trashCategories = [
-    { id: 'cat-plastic', name: 'Plastic', status: 'active' },
-    { id: 'cat-paper', name: 'Paper', status: 'active' },
-    { id: 'cat-glass', name: 'Glass', status: 'active' },
+    { id: 'plastic', name: 'Plastic', status: 'active' },
+    { id: 'paper', name: 'Paper', status: 'active' },
+    { id: 'metal', name: 'Metal', status: 'active' },
+    { id: 'glass', name: 'Glass', status: 'active' },
+    { id: 'organic', name: 'Organic', status: 'active' },
+    { id: 'mixed-waste', name: 'Mixed Waste', status: 'active' },
+    { id: 'other', name: 'Other', status: 'active' },
   ];
 
   const activeSession = createSession(routes[0], missionDefinitions, {
@@ -433,10 +437,40 @@ function getAdminDashboardData() {
       missions: state.missionDefinitions.length,
       activeMissions: state.missionDefinitions.filter((mission) => mission.status === 'active')
         .length,
+      activeRouteSessions: state.routeSessions.filter((session) => session.status === 'active').length,
+      trashSubmissions: state.trashSubmissions.length,
     },
     recentUsers,
     routes: state.routes,
+    missions: sortByTimestampDescending(state.missionDefinitions, ['updatedAt', 'createdAt']),
+    rewards: state.rewards,
+    sessions: sortByTimestampDescending(state.routeSessions, ['updatedAt', 'createdAt']),
+    submissions: sortByTimestampDescending(state.trashSubmissions, ['updatedAt', 'createdAt']).map(
+      (submission) => {
+        const session = state.routeSessions.find(
+          (item) => item.id === submission.routeSessionId
+        );
+
+        return {
+          ...submission,
+          routeName: session?.routeName || getRouteById(submission.routeId)?.title || 'Unknown Route',
+          userName: state.user.fullName,
+          quantity: submission.quantity || 1,
+        };
+      }
+    ),
   };
+}
+
+function sortByTimestampDescending(items, keys) {
+  return [...items].sort((first, second) => {
+    const firstKey = keys.find((key) => first[key]);
+    const secondKey = keys.find((key) => second[key]);
+    const firstValue = firstKey ? new Date(first[firstKey]) : new Date(0);
+    const secondValue = secondKey ? new Date(second[secondKey]) : new Date(0);
+
+    return secondValue - firstValue;
+  });
 }
 
 function getSessionById(sessionId) {
@@ -463,6 +497,10 @@ function getSessionDetails(sessionId) {
 
 function getMissionProgress(sessionId) {
   return getSessionById(sessionId).missionProgress;
+}
+
+function getTrashCategories() {
+  return [...state.trashCategories];
 }
 
 function startRouteSession(routeId) {
@@ -498,7 +536,7 @@ function startRouteSession(routeId) {
   return session;
 }
 
-function confirmTrash(sessionId, finalCategoryId = 'cat-plastic') {
+function confirmTrash(sessionId, finalCategoryId = 'plastic', quantity = 1, imageUri = null) {
   const session = getSessionById(sessionId);
 
   if (session.status !== 'active') {
@@ -513,8 +551,10 @@ function confirmTrash(sessionId, finalCategoryId = 'cat-plastic') {
     throw createHttpError(400, 'Invalid category');
   }
 
-  session.trashCollected += 1;
-  session.approvedTrashCount += 1;
+  const safeQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
+
+  session.trashCollected += safeQuantity;
+  session.approvedTrashCount += safeQuantity;
   session.updatedAt = now();
 
   session.missionProgress = session.missionProgress.map((mission) => {
@@ -522,7 +562,7 @@ function confirmTrash(sessionId, finalCategoryId = 'cat-plastic') {
       return mission;
     }
 
-    const currentCount = mission.currentCount + 1;
+    const currentCount = mission.currentCount + safeQuantity;
 
     return {
       ...mission,
@@ -531,7 +571,7 @@ function confirmTrash(sessionId, finalCategoryId = 'cat-plastic') {
     };
   });
 
-  state.user.totalTrashCollected += 1;
+  state.user.totalTrashCollected += safeQuantity;
 
   const submissionId = `submission-${state.nextSubmissionNumber}`;
   state.nextSubmissionNumber += 1;
@@ -542,6 +582,18 @@ function confirmTrash(sessionId, finalCategoryId = 'cat-plastic') {
     routeId: session.routeId,
     finalCategoryId: category.id,
     finalCategoryName: category.name,
+    trashCategoryId: category.id,
+    trashCategoryName: category.name,
+    quantity: safeQuantity,
+    imageUri,
+    imageUrl: imageUri,
+    storagePath: null,
+    aiSuggestedCategoryId: null,
+    aiSuggestedCategoryName: null,
+    aiConfidence: null,
+    aiReason: null,
+    aiNeedsReview: false,
+    categoryChangedByUser: false,
     status: 'auto_approved',
     createdAt: now(),
     updatedAt: now(),
@@ -628,6 +680,7 @@ module.exports = {
   getProfileData,
   getSessionDetails,
   getMissionProgress,
+  getTrashCategories,
   startRouteSession,
   confirmTrash,
   finishRouteSession,

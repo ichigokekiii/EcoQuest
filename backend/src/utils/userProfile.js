@@ -25,6 +25,7 @@ function buildDefaultUserProfile({ uid, fullName, email, username }) {
     level: 1,
     totalTrashCollected: 0,
     routesCompleted: 0,
+    missionsCompleted: 0,
     achievementsCount: 0,
   };
 }

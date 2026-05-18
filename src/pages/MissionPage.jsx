@@ -1,68 +1,50 @@
-﻿﻿import Header from "../components/Header";
+﻿﻿import { useState, useEffect } from "react";
+import Header from "../components/Header";
 
 const missionFilters = ["Active", "Scheduled", "Archived"];
 
-const missionCards = [
-  {
-    title: "Plastic-Free Weekend",
-    id: "MS-2049A",
-    status: "Active",
-    route: "Coastal Bay Trail",
-    requirement: "Collect 15 PET Bottles",
-    date: "Oct 12 - Oct 14",
-    reward: "+500 XP",
-  },
-  {
-    title: "Urban Park Cleanup",
-    id: "MS-2050B",
-    status: "Active",
-    route: "Rizal Park Loop",
-    requirement: "Clear 3 Trash Spots",
-    date: "Oct 01 - Oct 31",
-    reward: "+120 XP",
-  },
-  {
-    title: "E-Waste Collection",
-    id: "MS-2051C",
-    status: "Scheduled",
-    route: "Tech District Path",
-    requirement: "Submit 2 E-Waste Photos",
-    date: "Nov 01 - Nov 15",
-    reward: "+800 XP",
-  },
-];
-
 function MissionCard({ mission }) {
+  // Gracefully handle raw columns coming straight from your database query
+  const displayId = mission.id ? `MS-${mission.id}` : "N/A";
+  const displayRoute = mission.assigned_route || "Unassigned Route";
+  const displayRequirement =
+    mission.requirement || mission.description || "No specific target";
+  const displayReward = mission.xp_reward ? `+${mission.xp_reward} XP` : "0 XP";
+
+  // Use dates from database if present, otherwise fallback to mock data seen in your UI mockup
+  const displayDate = mission.date_range || "Oct 12 - Oct 14";
+  const displayStatus = mission.status || "Active";
+
   return (
     <article className="mission-card">
       <div className="mission-card-header">
         <div>
-          <h3>{mission.title}</h3>
-          <p className="mission-card-id">ID: {mission.id}</p>
+          <h3>{mission.title || "Untitled Mission"}</h3>
+          <p className="mission-card-id">ID: {displayId}</p>
         </div>
         <span
-          className={`mission-card-badge mission-card-badge-${mission.status.toLowerCase()}`}
+          className={`mission-card-badge mission-card-badge-${displayStatus.toLowerCase()}`}
         >
-          {mission.status}
+          {displayStatus}
         </span>
       </div>
 
       <div className="mission-card-meta">
         <div className="mission-card-line">
           <span className="mission-card-label">Assigned Route</span>
-          <span>{mission.route}</span>
+          <span>{displayRoute}</span>
         </div>
         <div className="mission-card-line">
           <span className="mission-card-label">Requirement</span>
-          <span>{mission.requirement}</span>
+          <span>{displayRequirement}</span>
         </div>
         <div className="mission-card-line">
           <span className="mission-card-label">Date Range</span>
-          <span>{mission.date}</span>
+          <span>{displayDate}</span>
         </div>
         <div className="mission-card-line">
           <span className="mission-card-label">XP Reward</span>
-          <span>{mission.reward}</span>
+          <span>{displayReward}</span>
         </div>
       </div>
 
@@ -79,12 +61,60 @@ function MissionCard({ mission }) {
 }
 
 function MissionPage() {
+  // 1. Core State Hooks
+  const [missions, setMissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // 2. Filter & Search UI State Hooks
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("Active");
+
+  // 3. Fetch data from XAMPP local PHP server on mount
+  useEffect(() => {
+    fetch("http://localhost/EcoQuest/api/index.php?endpoint=missions")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to communicate with local PHP server.");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setMissions(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Database connection error:", err);
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  // 4. Client-Side Interactive Filtering Matrix
+  const filteredMissions = missions.filter((mission) => {
+    const title = mission.title || "";
+    const routeName = mission.assigned_route || "";
+    const currentStatus = mission.status || "Active"; // fallback default matching your UI screenshots
+
+    // Step A: Evaluate Search Criteria (Matches Title OR Joined Route Name)
+    const matchesSearch =
+      title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      routeName.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    // Step B: Evaluate Pill Filter Status Condition
+    return currentStatus.toLowerCase() === activeFilter.toLowerCase();
+  });
+
   return (
     <section className="mission-page">
       <Header
         title="Mission Management"
         subtitle="Oversee active campaigns, manage requirements, and track global progress."
         searchPlaceholder="Search missions, routes..."
+        onSearchChange={(e) => setSearchQuery(e.target.value)}
+        searchValue={searchQuery}
         actions={
           <button type="button" className="filled-action">
             Create New Mission
@@ -94,11 +124,12 @@ function MissionPage() {
 
       <section className="mission-filters" aria-label="Mission filters">
         <div className="filter-pills">
-          {missionFilters.map((filter, index) => (
+          {missionFilters.map((filter) => (
             <button
               key={filter}
               type="button"
-              className={`filter-pill${index === 0 ? " active" : ""}`}
+              className={`filter-pill${activeFilter === filter ? " active" : ""}`}
+              onClick={() => setActiveFilter(filter)}
             >
               {filter}
             </button>
@@ -106,10 +137,37 @@ function MissionPage() {
         </div>
       </section>
 
+      {/* Handling Loading state wrappers, Server errors, or Empty Database States cleanly */}
       <section className="mission-grid" aria-label="Mission cards">
-        {missionCards.map((mission) => (
-          <MissionCard key={mission.id} mission={mission} />
-        ))}
+        {loading && (
+          <p style={{ gridColumn: "1 / -1", padding: "20px" }}>
+            Loading missions from ecoquest schema...
+          </p>
+        )}
+
+        {error && (
+          <p style={{ gridColumn: "1 / -1", padding: "20px", color: "red" }}>
+            Error: {error}
+          </p>
+        )}
+
+        {!loading && !error && filteredMissions.length === 0 && (
+          <p
+            style={{
+              gridColumn: "1 / -1",
+              padding: "40px",
+              textAlign: "center",
+            }}
+          >
+            No missions found matching the "{activeFilter}" criteria.
+          </p>
+        )}
+
+        {!loading &&
+          !error &&
+          filteredMissions.map((mission) => (
+            <MissionCard key={mission.id || mission.title} mission={mission} />
+          ))}
       </section>
     </section>
   );

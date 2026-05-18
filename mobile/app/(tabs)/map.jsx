@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import axios from 'axios';
@@ -16,7 +15,6 @@ const CARD_MARGIN = spacing.sm;
 const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5001' : 'http://localhost:5001';
 
 export default function MapScreen() {
-  const router = useRouter();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
@@ -52,7 +50,7 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <MapView
+      <MapView 
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
@@ -66,10 +64,8 @@ export default function MapScreen() {
             <Polyline
               coordinates={route.coordinates}
               strokeColor="#16A34A"
-              strokeWidth={4}
+              strokeWidth={3}
               lineDashPattern={[5, 5]}
-              lineCap="round"
-              lineJoin="round"
             />
             {/* Draw Markers */}
             {route.markers.map((marker) => (
@@ -79,7 +75,7 @@ export default function MapScreen() {
                 anchor={{ x: 0.5, y: 0.5 }}
               >
                 <View style={[styles.customMarker, { backgroundColor: marker.color }]}>
-                  <Feather name="wind" size={16} color="#FFFFFF" />
+                  <Feather name="leaf" size={16} color="#FFFFFF" />
                 </View>
                 {marker.type === 'start' && (
                   <View style={styles.markerLabelContainer}>
@@ -97,7 +93,7 @@ export default function MapScreen() {
         <View style={styles.topContainer}>
           <View style={styles.searchContainer}>
             <Feather name="search" size={20} color="#9CA3AF" style={styles.searchIcon} />
-            <TextInput
+            <TextInput 
               style={styles.searchInput}
               placeholder="Search cleanup routes..."
               placeholderTextColor="#9CA3AF"
@@ -113,52 +109,52 @@ export default function MapScreen() {
 
         {/* Bottom Section: Filters and Cards */}
         <View style={styles.bottomSection} pointerEvents="box-none">
-
+          
           {/* Floating Filter Pills */}
-          <ScrollView
-            horizontal
+          <ScrollView 
+            horizontal 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterScrollContent}
             style={styles.filterScroll}
           >
             <View style={styles.filterPillsContainer}>
-              <TouchableOpacity
+              <TouchableOpacity 
                 style={[styles.filterPill, activeFilter === 'All Routes' && styles.filterPillActive]}
                 onPress={() => setActiveFilter('All Routes')}
               >
-                <Feather name="map" size={14} color={activeFilter === 'All Routes' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Feather name="map" size={14} color={activeFilter === 'All Routes' ? '#FFFFFF' : '#6B7280'} style={{marginRight: 6}} />
                 <Text style={[styles.filterPillText, activeFilter === 'All Routes' && styles.filterPillTextActive]}>All Routes</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
+              
+              <TouchableOpacity 
                 style={[styles.filterPill, activeFilter === 'Easy' && styles.filterPillActive]}
                 onPress={() => setActiveFilter('Easy')}
               >
-                <Feather name="wind" size={14} color={activeFilter === 'Easy' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Feather name="wind" size={14} color={activeFilter === 'Easy' ? '#FFFFFF' : '#6B7280'} style={{marginRight: 6}} />
                 <Text style={[styles.filterPillText, activeFilter === 'Easy' && styles.filterPillTextActive]}>Easy</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
+              
+              <TouchableOpacity 
                 style={[styles.filterPill, activeFilter === 'Medium' && styles.filterPillActive]}
                 onPress={() => setActiveFilter('Medium')}
               >
-                <Feather name="target" size={14} color={activeFilter === 'Medium' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Feather name="target" size={14} color={activeFilter === 'Medium' ? '#FFFFFF' : '#6B7280'} style={{marginRight: 6}} />
                 <Text style={[styles.filterPillText, activeFilter === 'Medium' && styles.filterPillTextActive]}>Medium</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
+              
+              <TouchableOpacity 
                 style={[styles.filterPill, activeFilter === 'Hard' && styles.filterPillActive]}
                 onPress={() => setActiveFilter('Hard')}
               >
-                <Feather name="zap" size={14} color={activeFilter === 'Hard' ? '#FFFFFF' : '#6B7280'} style={{ marginRight: 6 }} />
+                <Feather name="zap" size={14} color={activeFilter === 'Hard' ? '#FFFFFF' : '#6B7280'} style={{marginRight: 6}} />
                 <Text style={[styles.filterPillText, activeFilter === 'Hard' && styles.filterPillTextActive]}>Hard</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
 
           {/* Horizontal Route Cards */}
-          <ScrollView
-            horizontal
+          <ScrollView 
+            horizontal 
             showsHorizontalScrollIndicator={false}
             snapToInterval={CARD_WIDTH + CARD_MARGIN * 2}
             decelerationRate="fast"
@@ -169,7 +165,7 @@ export default function MapScreen() {
                 <View style={styles.routeHeaderRow}>
                   <Text style={styles.routeTitle}>{route.title}</Text>
                   <View style={[
-                    styles.badge,
+                    styles.badge, 
                     route.difficulty === 'Easy' ? styles.badgeEasy : styles.badgeMedium
                   ]}>
                     <Text style={[
@@ -178,7 +174,7 @@ export default function MapScreen() {
                     ]}>{route.difficulty}</Text>
                   </View>
                 </View>
-
+                
                 <View style={styles.routeLocationRow}>
                   <Feather name="map-pin" size={14} color="#9CA3AF" />
                   <Text style={styles.routeLocationText}>{route.locationName}</Text>
@@ -193,9 +189,9 @@ export default function MapScreen() {
                     <Feather name="clock" size={14} color="#9CA3AF" />
                     <Text style={styles.routeStatText}>{route.duration}</Text>
                   </View>
-                  <View style={styles.routeStatItem}>
-                    <Feather name="trash-2" size={14} color="#6B7280" style={styles.routeStatIcon} />
-                    <Text style={styles.routeStatText}>Goal: {route.targetTrash}</Text>
+                  <View style={styles.routeStat}>
+                    <Feather name="trash-2" size={14} color="#9CA3AF" />
+                    <Text style={styles.routeStatText}>{route.minTrash}</Text>
                   </View>
                 </View>
 
@@ -204,10 +200,7 @@ export default function MapScreen() {
                     <Feather name="zap" size={16} color="#16A34A" />
                     <Text style={styles.pointsEarnedText}>+{route.points} pts</Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.viewDetailsButton}
-                    onPress={() => router.push({ pathname: '/route-details', params: { id: route.id } })}
-                  >
+                  <TouchableOpacity style={styles.viewDetailsButton}>
                     <Text style={styles.viewDetailsText}>View Details</Text>
                   </TouchableOpacity>
                 </View>

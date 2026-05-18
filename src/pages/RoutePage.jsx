@@ -4,6 +4,27 @@ import Header from "../components/Header";
 const regionOptions = ["Manila, NCR", "Taguig, NCR", "Quezon City, NCR"];
 const difficultyOptions = ["Easy", "Medium", "Hard"];
 
+// Helper map helper to assign your layout styles safely based on row IDs or data properties
+const getToneAssignment = (id, difficulty) => {
+  if (difficulty?.toLowerCase() === "easy") return "forest";
+  if (id % 2 === 0) return "ink";
+  return "sky";
+};
+
+function RoutePreview({ tone }) {
+  return (
+    <div className={`route-preview route-preview-${tone}`}>
+      <div className="route-preview-map" />
+      <div className="route-preview-panel">
+        <div className="route-preview-line one" />
+        <div className="route-preview-line two" />
+        <div className="route-preview-dot one" />
+        <div className="route-preview-dot two" />
+      </div>
+    </div>
+  );
+}
+
 function RouteCard({ route, onUpdateSuccess }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -17,18 +38,18 @@ function RouteCard({ route, onUpdateSuccess }) {
     status: route.status || "Draft",
   });
 
-  // 🛠️ Dynamic Validation Rule: Detects if fields are missing or left as "TBD"
+  // 🛠️ Dynamic Incomplete Rule Check
   const isIncomplete =
-    !editForm.name.trim() ||
-    !editForm.description.trim() ||
-    !editForm.distance.trim() ||
-    !editForm.est_time.trim() ||
-    !editForm.trash_spots.trim() ||
-    editForm.trash_spots.toUpperCase() === "TBD";
+    !editForm.name?.trim() ||
+    !editForm.distance?.trim() ||
+    !editForm.est_time?.trim() ||
+    !editForm.trash_spots?.trim() ||
+    editForm.trash_spots?.toUpperCase() === "TBD";
 
-  // Force badge status visually to match requirements
   const displayStatus = isIncomplete ? "Draft" : editForm.status;
-  const actionButtonText = isIncomplete ? "Continue Editing" : "Manage Route";
+  const statusTone = displayStatus.toLowerCase();
+  const actionText = isIncomplete ? "Continue Editing" : "Manage Route";
+  const previewTone = getToneAssignment(route.id, editForm.difficulty);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -36,8 +57,8 @@ function RouteCard({ route, onUpdateSuccess }) {
   };
 
   const handleSave = () => {
-    // Automatically set status to Draft if user saves an incomplete layout
-    const payload = {
+    // Automatically set fallback status according to field completeness metrics
+    const finalPayload = {
       ...editForm,
       status: isIncomplete ? "Draft" : "Active",
     };
@@ -47,243 +68,187 @@ function RouteCard({ route, onUpdateSuccess }) {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(finalPayload),
       },
     )
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
           setIsEditing(false);
-          onUpdateSuccess();
+          onUpdateSuccess(); // Trigger database re-fetch on parent layout container
         } else {
-          alert(data.message);
+          alert(data.message || "Failed to update database record.");
         }
       })
       .catch((err) => console.error("Error updating route record:", err));
   };
 
+  // Pre-fill placeholder badge value mapping metric
+  const badgeValue = route.id ? Number(route.id) * 8 + 16 : "0";
+
   return (
-    <article
-      className="route-card"
-      style={{
-        border: "1px solid #e2e8f0",
-        borderRadius: "16px",
-        padding: "20px",
-        backgroundColor: "#fff",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.02)",
-      }}
-    >
-      <div
-        className="route-card-header"
-        style={{
-          display: "flex",
-          justifyContent: "between",
-          alignItems: "start",
-          marginBottom: "15px",
-        }}
-      >
-        <div style={{ flexGrow: 1 }}>
-          {isEditing ? (
-            <input
-              type="text"
-              name="name"
-              className="edit-input"
-              value={editForm.name}
-              onChange={handleChange}
-              style={{
-                width: "90%",
-                padding: "6px",
-                fontSize: "1.1rem",
-                fontWeight: "bold",
-              }}
-            />
-          ) : (
-            <h3 style={{ margin: 0, fontSize: "1.25rem" }}>{route.name}</h3>
-          )}
-        </div>
-        <span
-          className={`status-badge status-${displayStatus.toLowerCase()}`}
-          style={{
-            padding: "4px 10px",
-            borderRadius: "20px",
-            fontSize: "0.8rem",
-            backgroundColor: displayStatus === "Draft" ? "#e2e8f0" : "#d1e7dd",
-            color: displayStatus === "Draft" ? "#4a5568" : "#0f5132",
-          }}
-        >
+    <article className="route-card">
+      <div className="route-card-media">
+        <RoutePreview tone={previewTone} />
+        <span className={`route-status route-status-${statusTone}`}>
           {displayStatus}
         </span>
       </div>
 
-      <div
-        className="route-card-body"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-          fontSize: "0.9rem",
-          color: "#4a5568",
-          marginBottom: "20px",
-        }}
-      >
-        <div>
-          {isEditing ? (
-            <select
-              name="region"
-              value={editForm.region}
-              onChange={handleChange}
-              style={{ padding: "6px", width: "100%" }}
-            >
-              {regionOptions.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span>{editForm.region}</span>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            borderTop: "1px solid #edf2f7",
-            paddingTop: "8px",
-            marginTop: "5px",
-          }}
-        >
-          <span>
-            <strong>Difficulty:</strong>
-          </span>
-          {isEditing ? (
-            <select
-              name="difficulty"
-              value={editForm.difficulty}
-              onChange={handleChange}
-              style={{ padding: "4px" }}
-            >
-              {difficultyOptions.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span
-              style={{
-                padding: "2px 8px",
-                borderRadius: "4px",
-                backgroundColor: "#f7fafc",
-              }}
-            >
-              {editForm.difficulty}
-            </span>
-          )}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Distance:</span>
-          {isEditing ? (
-            <input
-              type="text"
-              name="distance"
-              placeholder="e.g., 1.2 km"
-              value={editForm.distance}
-              onChange={handleChange}
-              style={{ width: "100px", textAlign: "right" }}
-            />
-          ) : (
-            <strong>{editForm.distance || "N/A"}</strong>
-          )}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Est. Time:</span>
-          {isEditing ? (
-            <input
-              type="text"
-              name="est_time"
-              placeholder="e.g., 18 min"
-              value={editForm.est_time}
-              onChange={handleChange}
-              style={{ width: "100px", textAlign: "right" }}
-            />
-          ) : (
-            <strong>{editForm.est_time || "N/A"}</strong>
-          )}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Trash Spots:</span>
-          {isEditing ? (
-            <input
-              type="text"
-              name="trash_spots"
-              placeholder="e.g., 3 or TBD"
-              value={editForm.trash_spots}
-              onChange={handleChange}
-              style={{ width: "100px", textAlign: "right" }}
-            />
-          ) : (
-            <strong>{editForm.trash_spots || "TBD"}</strong>
-          )}
-        </div>
-      </div>
-
-      <div
-        className="route-card-actions"
-        style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}
-      >
+      <div className="route-card-body">
         {isEditing ? (
-          <>
-            <button
-              type="button"
-              onClick={() => setIsEditing(false)}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e0",
-                background: "none",
-                cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "8px",
-                backgroundColor: "#2f5d4b",
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              Save
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsEditing(true)}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "none",
-              backgroundColor: isIncomplete ? "#4a5568" : "#2f5d4b",
-              color: "#fff",
-              fontWeight: "600",
-              cursor: "pointer",
-              width: "100%",
-            }}
+          <div
+            className="route-edit-fields"
+            style={{ display: "flex", flexDirection: "column", gap: "10px" }}
           >
-            {actionButtonText}
-          </button>
+            <label>
+              <small>Route Name</small>
+              <input
+                type="text"
+                name="name"
+                className="edit-input"
+                value={editForm.name}
+                onChange={handleChange}
+                style={{ width: "100%", padding: "5px" }}
+              />
+            </label>
+
+            <label>
+              <small>Region</small>
+              <select
+                name="region"
+                className="edit-input"
+                value={editForm.region}
+                onChange={handleChange}
+                style={{ width: "100%", padding: "5px" }}
+              >
+                {regionOptions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <small>Difficulty</small>
+              <select
+                name="difficulty"
+                className="edit-input"
+                value={editForm.difficulty}
+                onChange={handleChange}
+                style={{ width: "100%", padding: "5px" }}
+              >
+                {difficultyOptions.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <label style={{ flex: 1 }}>
+                <small>Distance</small>
+                <input
+                  type="text"
+                  name="distance"
+                  placeholder="1.2 km"
+                  value={editForm.distance}
+                  onChange={handleChange}
+                  style={{ width: "100%", padding: "5px" }}
+                />
+              </label>
+              <label style={{ flex: 1 }}>
+                <small>Est. Time</small>
+                <input
+                  type="text"
+                  name="est_time"
+                  placeholder="18 min"
+                  value={editForm.est_time}
+                  onChange={handleChange}
+                  style={{ width: "100%", padding: "5px" }}
+                />
+              </label>
+            </div>
+
+            <label>
+              <small>Trash Spots</small>
+              <input
+                type="text"
+                name="trash_spots"
+                placeholder="3 or TBD"
+                value={editForm.trash_spots}
+                onChange={handleChange}
+                style={{ width: "100%", padding: "5px" }}
+              />
+            </label>
+          </div>
+        ) : (
+          <>
+            <div className="route-title-row">
+              <h3>{route.name || "Untitled Route"}</h3>
+              <span className="route-difficulty">
+                {route.difficulty || "Easy"}
+              </span>
+            </div>
+            <p className="route-location">{route.region || "Manila, NCR"}</p>
+
+            <dl className="route-stats">
+              <div>
+                <dt>Distance</dt>
+                <dd>{route.distance || "N/A"}</dd>
+              </div>
+              <div>
+                <dt>Est. Time</dt>
+                <dd>{route.est_time || "N/A"}</dd>
+              </div>
+              <div>
+                <dt>Trash Spots</dt>
+                <dd>{route.trash_spots || "TBD"}</dd>
+              </div>
+            </dl>
+          </>
         )}
+
+        <div className="route-card-footer" style={{ marginTop: "15px" }}>
+          <div className="route-badge">
+            <span>{badgeValue}</span>
+          </div>
+
+          {isEditing ? (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                className="route-action"
+                onClick={() => setIsEditing(false)}
+                style={{
+                  padding: "6px 12px",
+                  background: "#ccc",
+                  color: "#333",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="route-action solid"
+                onClick={handleSave}
+                style={{ padding: "6px 12px" }}
+              >
+                Save
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              className={`route-action${actionText === "Continue Editing" ? " solid" : ""}`}
+            >
+              {actionText}
+            </button>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -292,86 +257,42 @@ function RouteCard({ route, onUpdateSuccess }) {
 function RoutePage() {
   const [routes, setRoutes] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [regionFilter, setRegionFilter] = useState("All");
-  const [difficultyFilter, setDifficultyFilter] = useState("All");
-  const [showModal, setShowModal] = useState(false);
-
-  const [newRoute, setNewRoute] = useState({
-    name: "",
-    description: "",
-    region: "Manila, NCR",
-    difficulty: "Easy",
-    distance: "",
-    est_time: "",
-    trash_spots: "TBD", // Sets it to incomplete by default
-    status: "Draft",
-  });
+  const [loading, setLoading] = useState(true);
 
   const fetchRoutes = () => {
     fetch("http://localhost/EcoQuest/api/index.php?endpoint=routes")
       .then((res) => res.json())
-      .then((data) => setRoutes(Array.isArray(data) ? data : []))
-      .catch((err) => console.error("Error loading routes data:", err));
+      .then((data) => {
+        setRoutes(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error connecting to backend API routes:", err);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
     fetchRoutes();
   }, []);
 
-  const handleCreateChange = (e) => {
-    const { name, value } = e.target;
-    setNewRoute((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleCreateSubmit = (e) => {
-    e.preventDefault();
-    fetch("http://localhost/EcoQuest/api/index.php?endpoint=routes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(newRoute),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setShowModal(false);
-          setNewRoute({
-            name: "",
-            description: "",
-            region: "Manila, NCR",
-            difficulty: "Easy",
-            distance: "",
-            est_time: "",
-            trash_spots: "TBD",
-            status: "Draft",
-          });
-          fetchRoutes();
-        } else {
-          alert(data.message);
-        }
-      })
-      .catch((err) => console.error("Error creating route:", err));
-  };
-
-  // 🔍 Omni-Search Filtering Engine
+  // 🔍 Fully functional client-side Omni-Search filtering engine
   const filteredRoutes = routes.filter((route) => {
     const name = route.name || "";
     const region = route.region || "";
     const difficulty = route.difficulty || "";
+    const status = route.status || "";
 
-    const matchesSearch =
+    return (
       name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       region.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      difficulty.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesRegion = regionFilter === "All" || region === regionFilter;
-    const matchesDifficulty =
-      difficultyFilter === "All" || difficulty === difficultyFilter;
-
-    return matchesSearch && matchesRegion && matchesDifficulty;
+      difficulty.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      status.toLowerCase().includes(searchQuery.toLowerCase())
+    );
   });
 
   return (
-    <section className="route-page" style={{ padding: "30px" }}>
+    <section className="route-page">
       <Header
         title="Route Management"
         subtitle="Manage and monitor active walking routes for eco-missions."
@@ -379,219 +300,53 @@ function RoutePage() {
         onSearchChange={(e) => setSearchQuery(e.target.value)}
         searchValue={searchQuery}
         actions={
-          <button
-            type="button"
-            className="filled-action"
-            onClick={() => setShowModal(true)}
-            style={{
-              backgroundColor: "#2f5d4b",
-              color: "#fff",
-              padding: "10px 20px",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "bold",
-            }}
-          >
+          <button type="button" className="filled-action route-create-button">
             Create New Route
           </button>
         }
       />
 
-      {/* Filter Toolbar */}
-      <div
-        className="filter-toolbar"
-        style={{ display: "flex", gap: "15px", margin: "25px 0" }}
-      >
-        <select
-          value={regionFilter}
-          onChange={(e) => setRegionFilter(e.target.value)}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            borderColor: "#cbd5e0",
-          }}
-        >
-          <option value="All">All Regions</option>
-          {regionOptions.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={difficultyFilter}
-          onChange={(e) => setDifficultyFilter(e.target.value)}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            borderColor: "#cbd5e0",
-          }}
-        >
-          <option value="All">All Difficulties</option>
-          {difficultyOptions.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Creation Popup Modal */}
-      {showModal && (
-        <div
-          className="modal-backdrop"
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            backgroundColor: "rgba(0,0,0,0.4)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 2000,
-          }}
-        >
-          <div
-            className="modal-content"
-            style={{
-              backgroundColor: "#fff",
-              padding: "30px",
-              borderRadius: "16px",
-              width: "400px",
-            }}
-          >
-            <h3>Create New Route</h3>
-            <form
-              onSubmit={handleCreateSubmit}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-                marginTop: "15px",
-              }}
-            >
-              <input
-                type="text"
-                name="name"
-                placeholder="Route Name"
-                required
-                value={newRoute.name}
-                onChange={handleCreateChange}
-                style={{ padding: "8px" }}
-              />
-              <textarea
-                name="description"
-                placeholder="Route Description"
-                value={newRoute.description}
-                onChange={handleCreateChange}
-                style={{ padding: "8px", height: "60px" }}
-              />
-
-              <select
-                name="region"
-                value={newRoute.region}
-                onChange={handleCreateChange}
-                style={{ padding: "8px" }}
-              >
-                {regionOptions.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                name="difficulty"
-                value={newRoute.difficulty}
-                onChange={handleCreateChange}
-                style={{ padding: "8px" }}
-              >
-                {difficultyOptions.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-
-              <input
-                type="text"
-                name="distance"
-                placeholder="Distance (e.g., 2.2 km)"
-                value={newRoute.distance}
-                onChange={handleCreateChange}
-                style={{ padding: "8px" }}
-              />
-              <input
-                type="text"
-                name="est_time"
-                placeholder="Est. Time (e.g., 30 min)"
-                value={newRoute.est_time}
-                onChange={handleCreateChange}
-                style={{ padding: "8px" }}
-              />
-              <input
-                type="text"
-                name="trash_spots"
-                placeholder="Trash Spots (Leave blank or 'TBD' for Draft status)"
-                value={newRoute.trash_spots}
-                onChange={handleCreateChange}
-                style={{ padding: "8px" }}
-              />
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "10px",
-                  marginTop: "10px",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  style={{ padding: "8px 16px" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#2f5d4b",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "6px",
-                  }}
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
+      <section className="route-toolbar" aria-label="Route filters">
+        <div className="route-selects">
+          <button type="button" className="route-select">
+            All Regions <span>▾</span>
+          </button>
+          <button type="button" className="route-select">
+            All Difficulties <span>▾</span>
+          </button>
         </div>
-      )}
 
-      {/* Grid Layout Container */}
-      <div
-        className="route-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-          gap: "25px",
-        }}
-      >
-        {filteredRoutes.map((route) => (
-          <RouteCard
-            key={route.id}
-            route={route}
-            onUpdateSuccess={fetchRoutes}
-          />
-        ))}
-      </div>
+        <div className="route-sort">
+          <span className="route-sort-icon">☰</span>
+          <span>Sort by:</span>
+          <button type="button" className="route-sort-button">
+            Recently Added <span>▾</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="route-grid" aria-label="Routes overview">
+        {loading && (
+          <p style={{ padding: "20px" }}>
+            Loading routes from system database...
+          </p>
+        )}
+
+        {!loading && filteredRoutes.length === 0 && (
+          <p style={{ padding: "20px", color: "#718096" }}>
+            No matching route paths found.
+          </p>
+        )}
+
+        {!loading &&
+          filteredRoutes.map((route) => (
+            <RouteCard
+              key={route.id}
+              route={route}
+              onUpdateSuccess={fetchRoutes}
+            />
+          ))}
+      </section>
     </section>
   );
 }

@@ -21,6 +21,7 @@ require_once './controllers/UserController.php';
 require_once './controllers/MissionController.php';
 require_once './controllers/RouteController.php';
 require_once './controllers/RewardsController.php';
+require_once './controllers/SubmissionsController.php';
 
 $database = new DatabaseConnection();
 $dbConn = $database->getConnection();
@@ -30,6 +31,7 @@ $userController = new UserController($dbConn);
 $routeController = new RouteController($dbConn);
 $missionController = new MissionController($dbConn);
 $rewardController = new RewardsController($dbConn);
+$submissionsController = new SubmissionsController($dbConn);
 
 $endpoint = $_GET['endpoint'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
@@ -45,18 +47,14 @@ if ($endpoint === 'users') {
     switch ($method) {
         case 'GET':
             if ($id !== null) {
-                // If your controller returns array structures, wrap it. 
-                // If it internal-echoes, use: $userController->getUserProfile($id);
                 echo json_encode($userController->getUserProfile($id));
             } else {
-                // FIXED: Removed the double echo json_encode nesting wrapping block
                 $userController->getAllUsers();
             }
             break;
 
         case 'POST':
             if ($id !== null) {
-                // ROUTING FIX: Handle multipart profile updates securely using POST with an id query
                 $userController->updateUser($id);
             } else {
                 $userController->addUser();
@@ -64,7 +62,6 @@ if ($endpoint === 'users') {
             break;
 
         case 'PUT':
-            // Fallback for tools executing JSON body requests without multipart forms
             $rawData = file_get_contents("php://input");
             $data = json_decode($rawData, true);
 
@@ -91,7 +88,7 @@ if ($endpoint === 'users') {
             break;
     }
 }
-// 🛠️ Handler Block for the EcoQuest Missions Endpoint
+//  Handler Block for the EcoQuest Missions Endpoint
 elseif ($endpoint === 'missions') {
     switch ($method) {
         case 'GET':
@@ -186,8 +183,8 @@ elseif ($endpoint === 'routes') {
             break;
     }
 }
-// 🎁 Gateway Router Logic Array for Rewards Endpoint
-else if ($endpoint === 'rewards') {
+// Gateway Router Logic Array for Rewards Endpoint
+elseif ($endpoint === 'rewards') {
     switch ($method) {
         case 'GET':
             $rewardController->getAllRewards();
@@ -210,11 +207,46 @@ else if ($endpoint === 'rewards') {
             $rewardController->updateReward($id);
             break;
 
+        // 🌟 ADDED DELETE CASE BLOCK TO HANDLE DELETIONS
+        case 'DELETE':
+            if ($id === null) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Bad Request: Missing reward ID for deletion."]);
+                break;
+            }
+            $rewardController->deleteReward($id);
+            break;
+
         default:
             http_response_code(405);
             echo json_encode(["message" => "HTTP Request Method handling not permitted."]);
             break;
     }
+}
+// Handler Block for Trash Submissions Verification Endpoint
+elseif ($endpoint === 'submissions') {
+    switch ($method) {
+        case 'GET':
+            $submissionsController->getAllSubmissions();
+            break;
+
+        case 'POST':
+            $status = $_POST['status'] ?? null;
+
+            if ($id && $status) {
+                $submissionsController->updateStatus($id, $status);
+            } else {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Missing submission ID parameter or status data value."]);
+            }
+            break;
+
+        default:
+            http_response_code(405);
+            echo json_encode(["message" => "HTTP Request Method handling not permitted on submissions endpoint."]);
+            break;
+    }
+
 } else {
     http_response_code(404);
     echo json_encode(["message" => "Endpoint not found."]);

@@ -176,4 +176,49 @@ class RewardsController
             echo json_encode(["success" => false, "message" => "Server error routing execution: " . $e->getMessage()]);
         }
     }
+    public function deleteReward($id)
+    {
+        try {
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(["success" => false, "message" => "Missing identification ID for deletion."]);
+                return;
+            }
+
+            // Optional: If you want to delete the physical image file from the server when the item is deleted
+            $selectQuery = "SELECT image_url FROM rewards WHERE id = :id";
+            $selectStmt = $this->db->prepare($selectQuery);
+            $selectStmt->bindParam(':id', $id, PDO::PARAM_INT);
+            $selectStmt->execute();
+            $reward = $selectStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($reward && $reward['image_url'] && $reward['image_url'] !== 'default-reward.png' && !filter_var($reward['image_url'], FILTER_VALIDATE_URL)) {
+                $filePath = $this->uploadDir . $reward['image_url'];
+                if (file_exists($filePath)) {
+                    unlink($filePath); // Delete local file
+                }
+            }
+
+            // Delete database row record entry
+            $query = "DELETE FROM rewards WHERE id = :id";
+            $stmt = $this->db->prepare($query);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+            if ($stmt->execute()) {
+                if ($stmt->rowCount() > 0) {
+                    http_response_code(200);
+                    echo json_encode(["success" => true, "message" => "Reward row record entry deleted successfully."]);
+                } else {
+                    http_response_code(404);
+                    echo json_encode(["success" => false, "message" => "No reward found with the provided ID."]);
+                }
+            } else {
+                http_response_code(500);
+                echo json_encode(["success" => false, "message" => "Failed to execute database delete action."]);
+            }
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(["success" => false, "message" => "Database error: " . $e->getMessage()]);
+        }
+    }
 }

@@ -10,22 +10,39 @@ function createHttpError(statusCode, message) {
   return error;
 }
 
-function buildMissionProgress(routeId, missionDefinitions, countsByMission = {}) {
-  return missionDefinitions
-    .filter((mission) => mission.routeId === routeId && mission.status === 'active')
-    .map((mission) => {
-      const currentCount = countsByMission[mission.id] || 0;
+function missionMatchesRouteId(mission, routeId) {
+  if (Array.isArray(mission.routeIds) && mission.routeIds.length > 0) {
+    return mission.routeIds.includes(routeId);
+  }
 
-      return {
-        missionId: mission.id,
-        title: mission.title,
-        currentCount,
-        requiredCount: mission.requiredTrashCount,
-        isCompleted: currentCount >= mission.requiredTrashCount,
-        trashCategoryId: mission.trashCategoryId,
-        trashCategoryName: mission.trashCategoryName,
-      };
-    });
+  return mission.routeId === routeId;
+}
+
+function buildMissionProgress(routeId, missionDefinitions, countsByMission = {}, selectedMissionIds = []) {
+  let eligibleMissions = missionDefinitions.filter(
+    (mission) => missionMatchesRouteId(mission, routeId) && mission.status === 'active'
+  );
+
+  if (Array.isArray(selectedMissionIds) && selectedMissionIds.length > 0) {
+    eligibleMissions = eligibleMissions.filter((mission) => selectedMissionIds.includes(mission.id));
+  } else if (Array.isArray(selectedMissionIds)) {
+    eligibleMissions = [];
+  }
+
+  return eligibleMissions.map((mission) => {
+    const currentCount = countsByMission[mission.id] || 0;
+
+    return {
+      missionId: mission.id,
+      title: mission.title,
+      currentCount,
+      requiredCount: mission.requiredTrashCount,
+      isCompleted: currentCount >= mission.requiredTrashCount,
+      trashCategoryId: mission.trashCategoryId,
+      trashCategoryName: mission.trashCategoryName,
+      pointsReward: mission.pointsReward || 0,
+    };
+  });
 }
 
 function createSession(route, missionDefinitions, options = {}) {
@@ -47,7 +64,8 @@ function createSession(route, missionDefinitions, options = {}) {
     missionProgress: buildMissionProgress(
       route.id,
       missionDefinitions,
-      options.countsByMission || {}
+      options.countsByMission || {},
+      options.selectedMissionIds ?? []
     ),
     basePointsEarned: options.basePointsEarned || 0,
     trashPointsEarned: options.trashPointsEarned || 0,
@@ -521,7 +539,7 @@ function getTrashCategories() {
   return [...state.trashCategories];
 }
 
-function startRouteSession(routeId) {
+function startRouteSession(routeId, selectedMissionIds = []) {
   const route = getRouteById(routeId);
 
   if (!route) {
@@ -547,6 +565,7 @@ function startRouteSession(routeId) {
     startedAt: createdAt,
     createdAt,
     updatedAt: createdAt,
+    selectedMissionIds: Array.isArray(selectedMissionIds) ? selectedMissionIds : [],
   });
 
   state.routeSessions.push(session);
@@ -632,6 +651,20 @@ function getMissionReward(missionId) {
   );
 }
 
+function cancelRouteSession(sessionId) {
+  const session = getSessionById(sessionId);
+
+  if (session.status !== 'active') {
+    throw createHttpError(400, 'Session is not active');
+  }
+
+  session.status = 'cancelled';
+  session.cancelledAt = now();
+  session.updatedAt = now();
+
+  return session;
+}
+
 function finishRouteSession(sessionId) {
   const session = getSessionById(sessionId);
 
@@ -684,6 +717,10 @@ function resetDemoState() {
   return getDashboardData();
 }
 
+function clearActiveRouteSessions() {
+  state.routeSessions = state.routeSessions.filter((session) => session.status !== 'active');
+}
+
 module.exports = {
   createHttpError,
   getDashboardData,
@@ -702,5 +739,7 @@ module.exports = {
   startRouteSession,
   confirmTrash,
   finishRouteSession,
+  cancelRouteSession,
   resetDemoState,
+  clearActiveRouteSessions,
 };

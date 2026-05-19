@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { colors, spacing, radius } from '../../src/constants/theme';
-import Card from '../../src/components/Card';
+import RouteListCard from '../../src/components/RouteListCard';
 import { getNearbyRoutes } from '../../src/services/api';
 
 const { width } = Dimensions.get('window');
@@ -172,53 +172,12 @@ export default function MapScreen() {
             contentContainerStyle={styles.cardsScrollContent}
           >
             {visibleRoutes.map((route) => (
-              <Card key={route.id} style={styles.routeCard}>
-                <View style={styles.routeHeaderRow}>
-                  <Text style={styles.routeTitle}>{route.title}</Text>
-                  <View style={[
-                    styles.badge,
-                    getDifficultyLabel(route.difficulty) === 'Easy' ? styles.badgeEasy : styles.badgeMedium
-                  ]}>
-                    <Text style={[
-                      styles.badgeText,
-                      getDifficultyLabel(route.difficulty) === 'Easy' ? styles.badgeTextEasy : styles.badgeTextMedium
-                    ]}>{getDifficultyLabel(route.difficulty)}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.routeLocationRow}>
-                  <Feather name="map-pin" size={14} color="#9CA3AF" />
-                  <Text style={styles.routeLocationText}>{route.locationName}</Text>
-                </View>
-
-                <View style={styles.routeStatsRow}>
-                  <View style={styles.routeStat}>
-                    <Feather name="map" size={14} color="#9CA3AF" />
-                    <Text style={styles.routeStatText}>{route.distance}</Text>
-                  </View>
-                  <View style={styles.routeStat}>
-                    <Feather name="clock" size={14} color="#9CA3AF" />
-                    <Text style={styles.routeStatText}>{route.duration}</Text>
-                  </View>
-                  <View style={styles.routeStatItem}>
-                    <Feather name="trash-2" size={14} color="#6B7280" style={styles.routeStatIcon} />
-                    <Text style={styles.routeStatText}>Goal: {route.targetTrash || route.minimumTrashRequired || 0}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.routeFooterRow}>
-                  <View style={styles.pointsEarned}>
-                    <Feather name="zap" size={16} color="#16A34A" />
-                    <Text style={styles.pointsEarnedText}>+{route.points} pts</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.viewDetailsButton}
-                    onPress={() => router.push({ pathname: '/route-details', params: { id: route.id } })}
-                  >
-                    <Text style={styles.viewDetailsText}>View Details</Text>
-                  </TouchableOpacity>
-                </View>
-              </Card>
+              <RouteListCard
+                key={route.id}
+                onPress={() => router.push({ pathname: '/route-details', params: { id: route.id } })}
+                route={route}
+                style={styles.routeCard}
+              />
             ))}
           </ScrollView>
         </View>
@@ -367,97 +326,6 @@ const styles = StyleSheet.create({
   routeCard: {
     width: CARD_WIDTH,
     marginHorizontal: CARD_MARGIN,
-    marginBottom: spacing.xs, // Shadow clearance
-    borderWidth: 2,
-    borderColor: 'transparent', // The active one is green in mock, setting up foundation
-  },
-  routeHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: spacing.xs,
   },
-  routeTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeEasy: {
-    backgroundColor: '#DCFCE7',
-  },
-  badgeMedium: {
-    backgroundColor: '#FEF3C7',
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  badgeTextEasy: {
-    color: '#16A34A',
-  },
-  badgeTextMedium: {
-    color: '#D97706',
-  },
-  routeLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  routeLocationText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  routeStatsRow: {
-    flexDirection: 'row',
-    marginBottom: spacing.lg,
-  },
-  routeStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: spacing.lg,
-  },
-  routeStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  routeStatIcon: {
-    marginRight: 0,
-  },
-  routeStatText: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    marginLeft: 6,
-  },
-  routeFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pointsEarned: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pointsEarnedText: {
-    color: '#16A34A',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 4,
-  },
-  viewDetailsButton: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  viewDetailsText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  }
 });

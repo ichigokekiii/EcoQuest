@@ -1,12 +1,28 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import Card from '../../src/components/Card';
-import { colors, spacing, radius } from '../../src/constants/theme';
+import RouteListCard from '../../src/components/RouteListCard';
+import { colors, spacing } from '../../src/constants/theme';
 import { getDashboard } from '../../src/services/api';
+
+const QUICK_ACTIONS = [
+  { id: 'map', label: 'Explore Map', icon: 'map', route: '/(tabs)/map' },
+  { id: 'missions', label: 'Missions', icon: 'target', route: '/(tabs)/missions' },
+  { id: 'store', label: 'Rewards', icon: 'shopping-bag', route: '/(tabs)/store' },
+  { id: 'profile', label: 'Profile', icon: 'user', route: '/(tabs)/profile' },
+];
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -28,6 +44,35 @@ function getDisplayName(profile) {
   }
 
   return profile.fullName.split(' ')[0];
+}
+
+function getInitial(profile) {
+  return getDisplayName(profile).charAt(0).toUpperCase();
+}
+
+function DashboardQuickAction({ action, onPress }) {
+  return (
+    <TouchableOpacity style={styles.quickActionTile} activeOpacity={0.85} onPress={onPress}>
+      <View style={styles.quickActionIconWrap}>
+        <Feather name={action.icon} size={22} color="#16A34A" />
+      </View>
+      <Text style={styles.quickActionLabel} numberOfLines={2}>
+        {action.label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function StatTile({ icon, value, label }) {
+  return (
+    <View style={styles.statTile}>
+      <View style={styles.statTileIconWrap}>
+        <Feather name={icon} size={18} color="#16A34A" />
+      </View>
+      <Text style={styles.statTileValue}>{value}</Text>
+      <Text style={styles.statTileLabel}>{label}</Text>
+    </View>
+  );
 }
 
 export default function HomeDashboardScreen() {
@@ -70,6 +115,36 @@ export default function HomeDashboardScreen() {
   const activeSession = dashboard?.activeSession || null;
   const recentSessions = dashboard?.recentSessions || [];
 
+  const activeProgressPercent = activeSession
+    ? Math.min(
+        ((activeSession.approvedTrashCount || 0) /
+          Math.max(
+            activeSession.visualMaxGoal || activeSession.requiredTrashCount || 1,
+            1
+          )) *
+          100,
+        100
+      )
+    : Math.min(
+        ((activeMission?.currentCount || 0) / Math.max(activeMission?.requiredCount || 1, 1)) * 100,
+        100
+      );
+
+  const handleHeroPress = () => {
+    if (activeSession) {
+      router.push({
+        pathname: '/active-route',
+        params: {
+          id: activeSession.routeId,
+          sessionId: activeSession.id,
+        },
+      });
+      return;
+    }
+
+    router.replace('/(tabs)/map');
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -80,127 +155,111 @@ export default function HomeDashboardScreen() {
         <View style={styles.headerSection}>
           <SafeAreaView edges={['top']} style={styles.safeArea}>
             <View style={styles.topBar}>
-              <View>
-                <Text style={styles.greetingText}>{getGreeting()}</Text>
+              <View style={styles.greetingGroup}>
+                <Text style={styles.greetingText}>Hello,</Text>
                 <Text style={styles.userName}>{getDisplayName(profile)}</Text>
               </View>
-              <TouchableOpacity style={styles.bellButton} onPress={loadDashboard}>
-                <Feather name="refresh-cw" size={18} color="#FFFFFF" />
+              <TouchableOpacity
+                style={styles.avatarButton}
+                onPress={() => router.push('/(tabs)/profile')}
+              >
+                <Text style={styles.avatarText}>{getInitial(profile)}</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.pointsCard}>
-              <View style={styles.pointsHeaderRow}>
-                <View>
-                  <Text style={styles.pointsLabel}>Total Points</Text>
-                  <Text style={styles.pointsValue}>
-                    {Number(stats.points || 0).toLocaleString()}
-                  </Text>
-                </View>
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankText}>Lv. {profile.level || 1}</Text>
-                </View>
-              </View>
-
-              <View style={styles.statsRow}>
-                <View style={styles.statBox}>
-                  <Feather name="trash-2" size={20} color="#FFFFFF" style={styles.statIcon} />
-                  <Text style={styles.statValue}>
-                    {Number(stats.totalTrashCollected || 0).toLocaleString()}
-                  </Text>
-                  <Text style={styles.statLabel}>Approved</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Feather name="map" size={20} color="#FFFFFF" style={styles.statIcon} />
-                  <Text style={styles.statValue}>{Number(stats.routesCompleted || 0)}</Text>
-                  <Text style={styles.statLabel}>Routes</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Feather name="target" size={20} color="#FFFFFF" style={styles.statIcon} />
-                  <Text style={styles.statValue}>{Number(stats.missionsCompleted || 0)}</Text>
-                  <Text style={styles.statLabel}>Missions</Text>
-                </View>
-              </View>
-            </View>
+            <TouchableOpacity
+              style={styles.searchBar}
+              activeOpacity={0.9}
+              onPress={() => router.push('/(tabs)/map')}
+            >
+              <Feather name="search" size={18} color="#9CA3AF" />
+              <Text style={styles.searchPlaceholder}>Find a cleanup route near you...</Text>
+            </TouchableOpacity>
           </SafeAreaView>
         </View>
 
         <View style={styles.bodySection}>
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-          <Card style={styles.activeMissionCard}>
-            <View style={styles.missionHeader}>
-              <View style={styles.missionIconWrapper}>
-                <Feather
-                  name={activeSession ? 'map-pin' : 'target'}
-                  size={24}
-                  color={activeSession ? colors.primary : colors.warning}
+          <TouchableOpacity style={styles.heroCard} activeOpacity={0.92} onPress={handleHeroPress}>
+            {activeSession ? (
+              <>
+                <View style={styles.heroBadge}>
+                  <Feather name="navigation" size={12} color="#FFFFFF" />
+                  <Text style={styles.heroBadgeText}>Active Route</Text>
+                </View>
+                <Text style={styles.heroTitle}>{activeSession.routeName || 'Cleanup Route'}</Text>
+                <Text style={styles.heroSubtitle}>
+                  {activeSession.approvedTrashCount || 0} /{' '}
+                  {activeSession.visualMaxGoal || activeSession.requiredTrashCount || 0} captured ·{' '}
+                  {activeSession.trashCollected || 0} submitted
+                </Text>
+                <View style={styles.heroProgressBg}>
+                  <View style={[styles.heroProgressFill, { width: `${activeProgressPercent}%` }]} />
+                </View>
+                <View style={styles.heroFooterRow}>
+                  <Text style={styles.heroActionText}>Resume Route</Text>
+                  <Feather name="arrow-right" size={18} color="#16A34A" />
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.heroBadgeMuted}>
+                  <Feather name="zap" size={12} color="#16A34A" />
+                  <Text style={styles.heroBadgeTextMuted}>Your Impact</Text>
+                </View>
+                <Text style={styles.heroPointsValue}>
+                  {Number(stats.points || 0).toLocaleString()}
+                </Text>
+                <Text style={styles.heroPointsLabel}>Total points earned</Text>
+                <View style={styles.heroMetaRow}>
+                  <View style={styles.levelPill}>
+                    <Text style={styles.levelPillText}>Lv. {profile.level || 1}</Text>
+                  </View>
+                  <Text style={styles.heroHint}>
+                    {activeMission?.title
+                      ? `Mission in progress: ${activeMission.title}`
+                      : `${getGreeting()} — ready for your next cleanup?`}
+                  </Text>
+                </View>
+                <View style={styles.heroFooterRow}>
+                  <Text style={styles.heroActionText}>Find a Route</Text>
+                  <Feather name="arrow-right" size={18} color="#16A34A" />
+                </View>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.statTileRow}>
+            <StatTile
+              icon="trash-2"
+              value={Number(stats.totalTrashCollected || 0).toLocaleString()}
+              label="Captured"
+            />
+            <StatTile
+              icon="map"
+              value={Number(stats.routesCompleted || 0).toLocaleString()}
+              label="Routes"
+            />
+            <StatTile
+              icon="target"
+              value={Number(stats.missionsCompleted || 0).toLocaleString()}
+              label="Missions"
+            />
+          </View>
+
+          <View style={styles.quickActionsSection}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.quickActionsGrid}>
+              {QUICK_ACTIONS.map((action) => (
+                <DashboardQuickAction
+                  key={action.id}
+                  action={action}
+                  onPress={() => router.push(action.route)}
                 />
-              </View>
-              <View style={styles.missionTextContent}>
-                <Text style={styles.missionTitle}>
-                  {activeSession ? 'Active Route Session' : 'Active Mission'}
-                </Text>
-                <Text style={styles.missionSubtitle}>
-                  {activeSession
-                    ? `${activeSession.routeName || 'Cleanup Route'} · ${activeSession.approvedTrashCount || 0}/${activeSession.requiredTrashCount || 0} approved`
-                    : activeMission?.title || 'No active mission yet'}
-                </Text>
-              </View>
-              <Text style={styles.missionProgressText}>
-                {activeSession
-                  ? `${activeSession.trashCollected || 0} submitted`
-                  : `${activeMission?.currentCount || 0} / ${activeMission?.requiredCount || 0}`}
-              </Text>
+              ))}
             </View>
-            <View style={styles.progressBarBackground}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: `${
-                      activeSession
-                        ? Math.min(
-                            ((activeSession.approvedTrashCount || 0) /
-                              Math.max(
-                                activeSession.visualMaxGoal ||
-                                  activeSession.requiredTrashCount ||
-                                  1,
-                                1
-                              )) *
-                              100,
-                            100
-                          )
-                        : Math.min(
-                            ((activeMission?.currentCount || 0) /
-                              Math.max(activeMission?.requiredCount || 1, 1)) *
-                              100,
-                            100
-                          )
-                    }%`,
-                  },
-                ]}
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.inlineActionButton}
-              onPress={() =>
-                activeSession
-                  ? router.push({
-                      pathname: '/active-route',
-                      params: {
-                        id: activeSession.routeId,
-                        sessionId: activeSession.id,
-                      },
-                    })
-                  : router.replace('/(tabs)/map')
-              }
-            >
-              <Text style={styles.inlineActionText}>
-                {activeSession ? 'Resume Route' : 'Find a Route'}
-              </Text>
-            </TouchableOpacity>
-          </Card>
+          </View>
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Nearby Routes</Text>
@@ -215,49 +274,11 @@ export default function HomeDashboardScreen() {
             </Card>
           ) : (
             nearbyRoutes.slice(0, 3).map((route) => (
-              <Card key={route.id} style={styles.routeCard}>
-                <View style={styles.routeHeaderRow}>
-                  <Text style={styles.routeTitle}>{route.title}</Text>
-                  <View style={styles.badgeEasy}>
-                    <Text style={styles.badgeEasyText}>
-                      {route.difficulty ? route.difficulty[0].toUpperCase() + route.difficulty.slice(1) : 'Easy'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.routeLocationRow}>
-                  <Feather name="map-pin" size={14} color="#9CA3AF" />
-                  <Text style={styles.routeLocationText}>{route.locationName}</Text>
-                </View>
-
-                <View style={styles.routeStatsRow}>
-                  <View style={styles.routeStat}>
-                    <Feather name="map" size={14} color="#9CA3AF" />
-                    <Text style={styles.routeStatText}>{route.distance}</Text>
-                  </View>
-                  <View style={styles.routeStat}>
-                    <Feather name="clock" size={14} color="#9CA3AF" />
-                    <Text style={styles.routeStatText}>{route.duration}</Text>
-                  </View>
-                  <View style={styles.routeStat}>
-                    <Feather name="trash-2" size={14} color="#9CA3AF" />
-                    <Text style={styles.routeStatText}>Goal {route.targetTrash || 0}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.routeFooterRow}>
-                  <View style={styles.pointsEarned}>
-                    <Feather name="zap" size={16} color="#16A34A" />
-                    <Text style={styles.pointsEarnedText}>+{route.points || 0} pts</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.viewDetailsButton}
-                    onPress={() => router.push({ pathname: '/route-details', params: { id: route.id } })}
-                  >
-                    <Text style={styles.viewDetailsText}>View Details</Text>
-                  </TouchableOpacity>
-                </View>
-              </Card>
+              <RouteListCard
+                key={route.id}
+                onPress={() => router.push({ pathname: '/route-details', params: { id: route.id } })}
+                route={route}
+              />
             ))
           )}
 
@@ -269,10 +290,10 @@ export default function HomeDashboardScreen() {
               <Card style={styles.historyCard}>
                 {recentSessions.map((session) => (
                   <View key={session.id} style={styles.historyRow}>
-                    <View>
+                    <View style={styles.historyTextGroup}>
                       <Text style={styles.historyTitle}>{session.routeName || 'Cleanup Route'}</Text>
                       <Text style={styles.historySubtitle}>
-                        {session.approvedTrashCount || 0} approved · +{session.totalPointsEarned || 0} pts
+                        {session.approvedTrashCount || 0} captured · +{session.totalPointsEarned || 0} pts
                       </Text>
                     </View>
                     <Feather name="check-circle" size={18} color={colors.primary} />
@@ -290,13 +311,13 @@ export default function HomeDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,
@@ -304,8 +325,8 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     backgroundColor: '#14532D',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
   },
@@ -316,81 +337,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
     marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  greetingGroup: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: spacing.md,
   },
   greetingText: {
     color: '#86EFAC',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   userName: {
     color: '#FFFFFF',
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '900',
+    letterSpacing: -0.5,
   },
-  bellButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  avatarButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  pointsCard: {
-    backgroundColor: '#22C55E',
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  pointsHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.lg,
-  },
-  pointsLabel: {
+  avatarText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  pointsValue: {
-    color: '#FFFFFF',
-    fontSize: 36,
-    fontWeight: '900',
-  },
-  rankBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  rankText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statBox: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statIcon: {
-    marginBottom: 6,
-  },
-  statValue: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
   },
-  statLabel: {
-    color: '#DCFCE7',
-    fontSize: 12,
-    marginTop: 2,
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  searchPlaceholder: {
+    flex: 1,
+    color: '#9CA3AF',
+    fontSize: 15,
+    fontWeight: '500',
   },
   bodySection: {
     paddingHorizontal: spacing.lg,
@@ -402,62 +402,196 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  activeMissionCard: {
-    gap: spacing.md,
+  heroCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    shadowColor: '#14532D',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    gap: spacing.sm,
   },
-  missionHeader: {
+  heroBadge: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
-  missionIconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
+  heroBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  heroBadgeMuted: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing.md,
+    gap: 6,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
-  missionTextContent: {
-    flex: 1,
+  heroBadgeTextMuted: {
+    color: '#16A34A',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
-  missionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  missionSubtitle: {
-    color: '#6B7280',
-    fontSize: 13,
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.textDark,
     marginTop: 2,
   },
-  missionProgressText: {
-    color: '#16A34A',
-    fontWeight: '800',
-    fontSize: 13,
+  heroSubtitle: {
+    fontSize: 14,
+    color: colors.muted,
+    fontWeight: '500',
   },
-  progressBarBackground: {
+  heroPointsValue: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: colors.textDark,
+    letterSpacing: -1,
+    marginTop: 2,
+  },
+  heroPointsLabel: {
+    fontSize: 14,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  heroMetaRow: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  levelPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  levelPillText: {
+    color: colors.textDark,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  heroHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.muted,
+    fontWeight: '500',
+  },
+  heroProgressBg: {
     height: 8,
     backgroundColor: '#E5E7EB',
     borderRadius: 999,
     overflow: 'hidden',
+    marginTop: spacing.xs,
   },
-  progressBarFill: {
+  heroProgressFill: {
     height: '100%',
     backgroundColor: '#16A34A',
     borderRadius: 999,
   },
-  inlineActionButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#111827',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
+  heroFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
-  inlineActionText: {
-    color: '#FFFFFF',
+  heroActionText: {
+    color: '#16A34A',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  statTileRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  statTile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    shadowColor: '#14532D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  statTileIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  statTileValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: colors.textDark,
+  },
+  statTileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.muted,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  quickActionsSection: {
+    gap: spacing.md,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+  },
+  quickActionTile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: spacing.md,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+  },
+  quickActionIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  quickActionLabel: {
+    fontSize: 11,
     fontWeight: '700',
-    fontSize: 13,
+    color: colors.textDark,
+    textAlign: 'center',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -467,91 +601,16 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#111827',
+    color: colors.textDark,
   },
   sectionAction: {
     color: '#16A34A',
     fontWeight: '700',
   },
   emptyStateText: {
-    color: '#6B7280',
+    color: colors.muted,
     fontSize: 14,
     lineHeight: 20,
-  },
-  routeCard: {
-    gap: spacing.md,
-  },
-  routeHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  routeTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  badgeEasy: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  badgeEasyText: {
-    color: '#166534',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  routeLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  routeLocationText: {
-    color: '#6B7280',
-    marginLeft: 6,
-    fontSize: 13,
-  },
-  routeStatsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  routeStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  routeStatText: {
-    color: '#374151',
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  routeFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pointsEarned: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pointsEarnedText: {
-    color: '#16A34A',
-    fontWeight: '800',
-    marginLeft: 6,
-  },
-  viewDetailsButton: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  viewDetailsText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
   },
   historyCard: {
     gap: spacing.md,
@@ -560,15 +619,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
+  },
+  historyTextGroup: {
+    flex: 1,
+    minWidth: 0,
   },
   historyTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.textDark,
   },
   historySubtitle: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.muted,
     marginTop: 2,
   },
 });

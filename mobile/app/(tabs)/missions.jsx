@@ -70,10 +70,6 @@ export default function MissionsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Missions</Text>
-          <View style={styles.doneBadge}>
-            <Feather name="check" size={14} color="#16A34A" />
-            <Text style={styles.doneBadgeText}>{completedMissions.length} Done</Text>
-          </View>
         </View>
 
         <View style={styles.weeklyProgressCard}>
@@ -192,20 +188,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
     color: '#111827',
-  },
-  doneBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  doneBadgeText: {
-    color: '#16A34A',
-    fontWeight: 'bold',
-    fontSize: 14,
-    marginLeft: 4,
   },
   weeklyProgressCard: {
     backgroundColor: '#F7F8FA',

@@ -11,6 +11,9 @@ const {
 const {
   getMissionsByRoute,
   resetDemoState,
+  startRouteSession,
+  cancelRouteSession,
+  clearActiveRouteSessions,
 } = require('../src/mock/mockData');
 
 function buildMissionProgressEntries(missions = []) {
@@ -116,4 +119,62 @@ test('mock route mission definitions resolve per route and start at zero when sn
   assert.ok(routeTwoProgress.some((mission) => mission.missionId === 'mission-shared'));
   assert.equal(routeOneProgress.some((mission) => mission.missionId === 'mission-2'), false);
   assert.equal(routeTwoProgress.some((mission) => mission.missionId === 'mission-1'), false);
+});
+
+test('mock startRouteSession snapshots zero mission progress for selected missions on each route', () => {
+  resetDemoState();
+  clearActiveRouteSessions();
+
+  const routeOneMissions = getMissionsByRoute('route-1');
+  const routeOneSession = startRouteSession(
+    'route-1',
+    routeOneMissions.map((mission) => mission.id)
+  );
+
+  assert.equal(routeOneSession.approvedTrashCount, 0);
+  assert.equal(routeOneSession.trashCollected, 0);
+  assert.ok(
+    routeOneSession.missionProgress.every(
+      (mission) => mission.currentCount === 0 && mission.isCompleted === false
+    )
+  );
+  assert.ok(routeOneSession.missionProgress.some((mission) => mission.missionId === 'mission-shared'));
+  assert.ok(routeOneSession.missionProgress.some((mission) => mission.missionId === 'mission-1'));
+  assert.equal(routeOneSession.missionProgress.some((mission) => mission.missionId === 'mission-2'), false);
+});
+
+test('mock startRouteSession with no selected missions starts with empty mission progress', () => {
+  resetDemoState();
+  clearActiveRouteSessions();
+
+  const session = startRouteSession('route-1', []);
+
+  assert.deepEqual(session.missionProgress, []);
+});
+
+test('mock startRouteSession only includes explicitly selected missions', () => {
+  resetDemoState();
+  clearActiveRouteSessions();
+
+  const session = startRouteSession('route-1', ['mission-1']);
+
+  assert.equal(session.missionProgress.length, 1);
+  assert.equal(session.missionProgress[0].missionId, 'mission-1');
+});
+
+test('mock cancelRouteSession ends active session so a fresh start is allowed', () => {
+  resetDemoState();
+  clearActiveRouteSessions();
+
+  const firstSession = startRouteSession('route-1');
+  firstSession.approvedTrashCount = 2;
+  firstSession.trashCollected = 4;
+
+  cancelRouteSession(firstSession.id);
+
+  const restartedSession = startRouteSession('route-1', getMissionsByRoute('route-1').map((mission) => mission.id));
+
+  assert.equal(restartedSession.approvedTrashCount, 0);
+  assert.equal(restartedSession.trashCollected, 0);
+  assert.notEqual(restartedSession.id, firstSession.id);
 });

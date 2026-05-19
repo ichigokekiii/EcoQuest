@@ -134,9 +134,6 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.headerTitle}>Profile</Text>
         </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.levelText}>Lv.{profile.level || 1}</Text>
-        </View>
       </View>
 
       <View style={styles.tabSelector}>
@@ -290,20 +287,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     color: '#111827',
-  },
-  headerRight: {
-    minWidth: 56,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  levelText: {
-    color: '#111827',
-    fontSize: 13,
-    fontWeight: '700',
   },
   tabSelector: {
     flexDirection: 'row',

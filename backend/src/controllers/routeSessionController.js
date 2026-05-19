@@ -1,6 +1,7 @@
 const { admin, getDb, isFirebaseConfigured } = require('../config/firebaseAdmin');
 const { serializeDoc, serializeRoute } = require('../utils/firestoreSerializers');
 const {
+  cancelRouteSession: cancelMockRouteSession,
   confirmTrash: confirmMockTrash,
   finishRouteSession: finishMockRouteSession,
   getActiveSession,
@@ -32,6 +33,24 @@ function buildMissionProgressEntries(missions = []) {
     trashCategoryName: mission.trashCategoryName || null,
     pointsReward: mission.pointsReward || 0,
   }));
+}
+
+function normalizeSelectedMissionIds(body = {}) {
+  if (!Array.isArray(body.missionIds)) {
+    return [];
+  }
+
+  return [...new Set(body.missionIds.filter((missionId) => typeof missionId === 'string' && missionId.trim()))];
+}
+
+function filterMissionsBySelection(missions = [], selectedMissionIds = []) {
+  if (!selectedMissionIds.length) {
+    return [];
+  }
+
+  const allowedMissionIds = new Set(selectedMissionIds);
+
+  return missions.filter((mission) => allowedMissionIds.has(mission.id));
 }
 
 function sortByTimestampDescending(items, keyCandidates) {
@@ -133,7 +152,8 @@ async function getRouteSessionById(req, res, next) {
 async function createRouteSession(req, res, next) {
   try {
     if (!isFirebaseConfigured()) {
-      const session = startMockRouteSession(req.params.routeId);
+      const selectedMissionIds = normalizeSelectedMissionIds(req.body);
+      const session = startMockRouteSession(req.params.routeId, selectedMissionIds);
 
       return res.status(201).json({
         message: 'Route session started',
@@ -164,6 +184,8 @@ async function createRouteSession(req, res, next) {
     }
 
     const missions = await fetchActiveMissionsForRoute(db, req.params.routeId);
+    const selectedMissionIds = normalizeSelectedMissionIds(req.body);
+    const selectedMissions = filterMissionsBySelection(missions, selectedMissionIds);
     const timestamp = admin.firestore.Timestamp.now();
     const sessionData = {
       userId: req.user.id,
@@ -182,7 +204,7 @@ async function createRouteSession(req, res, next) {
         serializedRoute.minimumTrashRequired ||
         serializedRoute.targetTrash ||
         0,
-      missionProgress: buildMissionProgressEntries(missions),
+      missionProgress: buildMissionProgressEntries(selectedMissions),
       basePointsEarned: 0,
       trashPointsEarned: 0,
       bonusPointsEarned: 0,
@@ -349,6 +371,42 @@ async function confirmRouteTrash(req, res, next) {
   }
 }
 
+async function cancelRouteSession(req, res, next) {
+  try {
+    if (!isFirebaseConfigured()) {
+      const session = cancelMockRouteSession(req.params.sessionId);
+
+      return res.json({
+        message: 'Route session cancelled',
+        session,
+      });
+    }
+
+    const sessionDoc = await getSessionDocForUser(req.params.sessionId, req.user.id);
+
+    if (sessionDoc.data().status !== 'active') {
+      throw createHttpError(400, 'Session is not active');
+    }
+
+    const timestamp = admin.firestore.Timestamp.now();
+
+    await sessionDoc.ref.update({
+      status: 'cancelled',
+      cancelledAt: timestamp,
+      updatedAt: timestamp,
+    });
+
+    const updatedSession = await sessionDoc.ref.get();
+
+    return res.json({
+      message: 'Route session cancelled',
+      session: serializeDoc(updatedSession),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function completeRouteSession(req, res, next) {
   try {
     if (!isFirebaseConfigured()) {
@@ -480,5 +538,6 @@ module.exports = {
   getRouteSessionById,
   createRouteSession,
   confirmRouteTrash,
+  cancelRouteSession,
   completeRouteSession,
 };

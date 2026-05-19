@@ -54,8 +54,8 @@ export async function getRouteSessionById(sessionId) {
   return response.data;
 }
 
-export async function startRouteSession(routeId) {
-  const response = await api.post(`/route-sessions/start/${routeId}`);
+export async function startRouteSession(routeId, { missionIds = [] } = {}) {
+  const response = await api.post(`/route-sessions/start/${routeId}`, { missionIds });
   return response.data;
 }
 
@@ -94,6 +94,11 @@ export async function confirmTrash(
 
 export async function finishRouteSession(sessionId) {
   const response = await api.post(`/route-sessions/${sessionId}/finish`);
+  return response.data;
+}
+
+export async function cancelRouteSession(sessionId) {
+  const response = await api.post(`/route-sessions/${sessionId}/cancel`);
   return response.data;
 }
 

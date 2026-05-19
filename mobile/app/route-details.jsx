@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, ActivityIndicator, Platform, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,7 +9,9 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-na
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { colors, spacing, radius } from '../src/constants/theme';
 import Card from '../src/components/Card';
-import { getActiveRouteSession, getRouteById, getRouteMissions, startRouteSession } from '../src/services/api';
+import RouteCaptureProgress from '../src/components/RouteCaptureProgress';
+import RouteMissionProgressRow from '../src/components/RouteMissionProgressRow';
+import { cancelRouteSession, getActiveRouteSession, getRouteById, getRouteMissions, startRouteSession } from '../src/services/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -49,6 +51,7 @@ export default function RouteDetailsScreen() {
   const [route, setRoute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [missions, setMissions] = useState([]);
+  const [selectedMissionIds, setSelectedMissionIds] = useState([]);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [starting, setStarting] = useState(false);
 
@@ -98,6 +101,107 @@ export default function RouteDetailsScreen() {
       console.log('Error fetching route details:', error);
       setLoading(false);
     }
+  };
+
+  const openActiveRoute = (nextRouteId, nextSessionId) => {
+    router.push({
+      pathname: '/active-route',
+      params: { id: nextRouteId, sessionId: nextSessionId },
+    });
+  };
+
+  const toggleMissionSelection = (missionId) => {
+    setSelectedMissionIds((current) =>
+      current.includes(missionId)
+        ? current.filter((id) => id !== missionId)
+        : [...current, missionId]
+    );
+  };
+
+  const beginRouteSession = async (missionIds) => {
+    const response = await startRouteSession(route.id, { missionIds });
+    openActiveRoute(route.id, response.session?.id);
+  };
+
+  const handleStartRoute = async () => {
+    const missionIds = [...selectedMissionIds];
+
+    const startSession = async () => {
+      try {
+        setStarting(true);
+        await beginRouteSession(missionIds);
+      } catch (error) {
+        console.log('Error starting route session:', error);
+
+        if (error.response?.status === 409) {
+          const existingSession =
+            error.response?.data?.session || (await getActiveRouteSession()).session;
+
+          if (!existingSession?.id) {
+            Alert.alert('Active route found', 'Unable to load your active route session. Please try again.');
+            return;
+          }
+
+          const isSameRoute = existingSession.routeId === route.id;
+          const routeLabel = existingSession.routeName || 'another route';
+
+          Alert.alert(
+            'Active route in progress',
+            isSameRoute
+              ? `You already have an active session on this route (${existingSession.approvedTrashCount || 0} captured, ${existingSession.trashCollected || 0} submitted).`
+              : `You already have an active session on "${routeLabel}" (${existingSession.approvedTrashCount || 0} captured, ${existingSession.trashCollected || 0} submitted).`,
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Resume',
+                onPress: () => openActiveRoute(existingSession.routeId || route.id, existingSession.id),
+              },
+              {
+                text: isSameRoute ? 'Restart Route' : 'End & Start Here',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    setStarting(true);
+                    await cancelRouteSession(existingSession.id);
+                    await beginRouteSession(missionIds);
+                  } catch (restartError) {
+                    console.log('Error restarting route session:', restartError);
+                    Alert.alert(
+                      'Unable to start route',
+                      restartError.response?.data?.message || 'Please try again in a moment.'
+                    );
+                  } finally {
+                    setStarting(false);
+                  }
+                },
+              },
+            ]
+          );
+          return;
+        }
+
+        Alert.alert(
+          'Unable to start route',
+          error.response?.data?.message || 'Please try again in a moment.'
+        );
+      } finally {
+        setStarting(false);
+      }
+    };
+
+    if (missions.length > 0 && missionIds.length === 0) {
+      Alert.alert(
+        'No missions selected',
+        'You can start without missions, or select optional missions now to earn bonus points along the route.',
+        [
+          { text: 'Choose Missions', style: 'cancel' },
+          { text: 'Start Anyway', onPress: startSession },
+        ]
+      );
+      return;
+    }
+
+    await startSession();
   };
 
   if (loading || !route) {
@@ -216,43 +320,42 @@ export default function RouteDetailsScreen() {
 
         {/* Trash Goal */}
         <Text style={styles.sectionTitle}>Trash Goal</Text>
-        <Card style={styles.trashGoalCard}>
-          <View style={styles.trashGoalHeader}>
-            <Text style={styles.trashGoalLabel}>Minimum to finish</Text>
-            <Text style={styles.trashGoalTarget}>{route.targetTrash || route.minimumTrashRequired || 0} items</Text>
-          </View>
-          <View style={styles.goalProgressBarBg}>
-            <View style={[styles.goalProgressBarFill, { width: '0%' }]} />
-          </View>
-          <View style={styles.goalProgressLabels}>
-            <Text style={styles.goalProgressSubtext}>0</Text>
-            <Text style={styles.goalProgressActive}>Goal: {route.visualMaxGoal || route.targetTrash || route.minimumTrashRequired || 0}</Text>
-          </View>
-        </Card>
+        <RouteCaptureProgress
+          capturedCount={0}
+          pointsPreview={0}
+          visualProgressTarget={
+            route.visualMaxGoal || route.targetTrash || route.minimumTrashRequired || 0
+          }
+        />
 
         {/* Available Missions */}
-        <Text style={styles.sectionTitle}>Available Missions</Text>
+        <Text style={styles.sectionTitle}>Optional Missions</Text>
+        <Text style={styles.sectionHint}>
+          Tap missions to include them before starting. Selected missions track progress with mini bars during your route.
+        </Text>
         {missions.length > 0 ? (
-          missions.slice(0, 3).map((mission) => (
-            <Card key={mission.id || mission.missionId} style={styles.missionCard}>
-              <View style={styles.missionHeaderRow}>
-                <View style={styles.iconCircleLight}>
-                  <Feather name="target" size={20} color="#16A34A" />
-                </View>
-                <View style={styles.cardTextContent}>
-                  <Text style={styles.missionTitle}>{mission.title}</Text>
-                  <Text style={styles.missionSubtitle}>
-                    0 / {mission.requiredTrashCount || mission.requiredCount || 0}{' '}
-                    {mission.trashCategoryName || 'items'}
-                  </Text>
-                </View>
-                <View style={styles.pointsWrapper}>
-                  <Feather name="zap" size={14} color="#16A34A" />
-                  <Text style={styles.pointsText}>+{mission.pointsReward || 0}</Text>
-                </View>
-              </View>
-            </Card>
-          ))
+          missions.map((mission) => {
+            const missionId = mission.id || mission.missionId;
+            const isSelected = selectedMissionIds.includes(missionId);
+
+            return (
+              <Card
+                key={missionId}
+                style={[styles.missionCard, isSelected && styles.missionCardSelected]}
+              >
+                <RouteMissionProgressRow
+                  title={mission.title}
+                  currentCount={0}
+                  requiredCount={mission.requiredTrashCount || mission.requiredCount || 0}
+                  trashCategoryName={mission.trashCategoryName}
+                  pointsReward={mission.pointsReward || 0}
+                  selectable
+                  selected={isSelected}
+                  onPress={() => toggleMissionSelection(missionId)}
+                />
+              </Card>
+            );
+          })
         ) : (
           <Card style={styles.missionCard}>
             <Text style={styles.emptyMissionsText}>No active missions are linked to this route yet.</Text>
@@ -266,38 +369,7 @@ export default function RouteDetailsScreen() {
         <TouchableOpacity 
           style={[styles.startButton, starting && styles.startButtonDisabled]}
           disabled={starting}
-          onPress={async () => {
-            try {
-              setStarting(true);
-              const response = await startRouteSession(route.id);
-              router.push({
-                pathname: '/active-route',
-                params: { id: route.id, sessionId: response.session?.id },
-              });
-            } catch (error) {
-              console.log('Error starting route session:', error);
-
-              if (error.response?.status === 409) {
-                try {
-                  const activeResponse = await getActiveRouteSession();
-
-                  if (activeResponse.session?.id) {
-                    router.push({
-                      pathname: '/active-route',
-                      params: {
-                        id: activeResponse.session.routeId || route.id,
-                        sessionId: activeResponse.session.id,
-                      },
-                    });
-                  }
-                } catch (activeError) {
-                  console.log('Error loading active session after conflict:', activeError);
-                }
-              }
-            } finally {
-              setStarting(false);
-            }
-          }}
+          onPress={handleStartRoute}
         >
           <Text style={styles.startButtonText}>{starting ? 'Starting...' : 'Start Route'}</Text>
         </TouchableOpacity>
@@ -498,93 +570,24 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: spacing.md,
   },
-  trashGoalCard: {
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  trashGoalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  sectionHint: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 20,
+    marginTop: -spacing.sm,
     marginBottom: spacing.md,
-  },
-  trashGoalLabel: {
-    fontSize: 15,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  trashGoalTarget: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#16A34A',
-  },
-  goalProgressBarBg: {
-    height: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 4,
-    marginBottom: spacing.sm,
-  },
-  goalProgressBarFill: {
-    height: 8,
-    backgroundColor: '#16A34A',
-    borderRadius: 4,
-  },
-  goalProgressLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  goalProgressSubtext: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  goalProgressActive: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#16A34A',
   },
   missionCard: {
     marginBottom: spacing.lg,
+  },
+  missionCardSelected: {
+    borderWidth: 2,
+    borderColor: '#BBF7D0',
   },
   emptyMissionsText: {
     fontSize: 14,
     color: '#6B7280',
     fontWeight: '500',
-  },
-  missionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconCircleLight: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#DCFCE7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  cardTextContent: {
-    flex: 1,
-  },
-  missionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  missionSubtitle: {
-    fontSize: 13,
-    color: '#9CA3AF',
-  },
-  pointsWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  pointsText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#16A34A',
-    marginLeft: 2,
   },
   bottomActionContainer: {
     position: 'absolute',

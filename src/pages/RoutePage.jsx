@@ -25,7 +25,7 @@ function RoutePreview({ tone }) {
   );
 }
 
-function RouteCard({ route, onUpdateSuccess }) {
+function RouteCard({ route, onUpdateSuccess, onDeleteSuccess }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     name: route.name || "",
@@ -77,6 +77,33 @@ function RouteCard({ route, onUpdateSuccess }) {
         }
       })
       .catch((err) => console.error("Error updating route record:", err));
+  };
+
+  // Handle Delete Fetch Execution Sequence Method
+  const handleDelete = () => {
+    if (
+      window.confirm(
+        `Are you absolutely sure you want to drop "${route.name || "this route"}" from EcoQuest metrics cleanly?`,
+      )
+    ) {
+      fetch(
+        `http://localhost/EcoQuest/api/index.php?endpoint=routes&id=${route.id}`,
+        {
+          method: "DELETE",
+        },
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            onDeleteSuccess();
+          } else {
+            alert(data.message || "Failed to clear selected entry index.");
+          }
+        })
+        .catch((err) =>
+          console.error("Error invoking deletion pipeline:", err),
+        );
+    }
   };
 
   const badgeValue = route.id ? Number(route.id) * 8 + 16 : "0";
@@ -251,13 +278,43 @@ function RouteCard({ route, onUpdateSuccess }) {
           </>
         )}
 
-        <div className="route-card-footer" style={{ marginTop: "15px" }}>
+        <div
+          className="route-card-footer"
+          style={{
+            marginTop: "15px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <div className="route-badge">
             <span>{badgeValue}</span>
           </div>
 
+          {/* Cleaned layout: Delete action only renders when isEditing === true */}
           {isEditing ? (
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                width: "100%",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="route-action"
+                style={{
+                  padding: "6px 12px",
+                  background: "#fed7d7",
+                  color: "#c53030",
+                  border: "1px solid #feb2b2",
+                  marginRight: "auto", // Pushes Delete to the left edge of action block
+                }}
+              >
+                Delete
+              </button>
               <button
                 type="button"
                 className="route-action"
@@ -280,13 +337,15 @@ function RouteCard({ route, onUpdateSuccess }) {
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className={`route-action${actionText === "Continue Editing" ? " solid" : ""}`}
-            >
-              {actionText}
-            </button>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={`route-action${actionText === "Continue Editing" ? " solid" : ""}`}
+              >
+                {actionText}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -341,7 +400,6 @@ function RoutePage() {
   const handleCreateSubmit = (e) => {
     e.preventDefault();
 
-    // Frontend status derivation rules based on fields completion status metrics
     const formIsIncomplete =
       !createForm.name?.trim() ||
       !createForm.distance?.trim() ||
@@ -374,7 +432,7 @@ function RoutePage() {
             est_time: "",
             trash_spots: "TBD",
           });
-          fetchRoutes(); // Dynamic UI Refresh
+          fetchRoutes();
         } else {
           alert(data.message || "Failed to create new route entry record.");
         }
@@ -430,7 +488,6 @@ function RoutePage() {
         }
       />
 
-      {/* Upgraded Functional Dropdown Toolbar Elements */}
       <section className="route-toolbar" aria-label="Route filters">
         <div className="route-selects" style={{ display: "flex", gap: "12px" }}>
           <div
@@ -554,7 +611,6 @@ function RoutePage() {
         </div>
       </section>
 
-      {/* Dynamic Route Creation Overlaid Modal Dialog */}
       {showCreateModal && (
         <div
           style={{
@@ -777,7 +833,6 @@ function RoutePage() {
         </div>
       )}
 
-      {/* Main Reactive Route Grid Layout Container Grid */}
       <section className="route-grid" aria-label="Routes overview">
         {loading && (
           <p style={{ padding: "20px" }}>Loading routes from database...</p>
@@ -797,6 +852,7 @@ function RoutePage() {
               key={route.id}
               route={route}
               onUpdateSuccess={fetchRoutes}
+              onDeleteSuccess={fetchRoutes}
             />
           ))}
       </section>

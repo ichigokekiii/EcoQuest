@@ -3,8 +3,8 @@ import Header from "../components/Header";
 
 const missionFilters = ["Active", "Scheduled", "Archived"];
 
-// --- MISSION CARD COMPONENT (With Edit & Delete) ---
-function MissionCard({ mission, onSaveSuccess }) {
+// --- MISSION CARD COMPONENT (With Edit, Delete, & View Details Callback) ---
+function MissionCard({ mission, onSaveSuccess, onViewDetails }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     title: mission.title || "",
@@ -195,7 +195,11 @@ function MissionCard({ mission, onSaveSuccess }) {
             >
               Edit
             </button>
-            <button type="button" className="mission-button primary">
+            <button
+              type="button"
+              className="mission-button primary"
+              onClick={() => onViewDetails(mission)}
+            >
               View Details
             </button>
           </>
@@ -205,15 +209,18 @@ function MissionCard({ mission, onSaveSuccess }) {
   );
 }
 
-// --- MAIN MISSION PAGE WITH CREATION LOGIC ---
+// --- MAIN MISSION PAGE WITH CREATION & DETAILS MODAL ---
 function MissionPage() {
   const [missions, setMissions] = useState([]);
-  const [routes, setRoutes] = useState([]); // Dynamic lists straight from your DB table
+  const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("Active");
+
+  // View Details State Tracking
+  const [selectedMission, setSelectedMission] = useState(null);
 
   // Modal toggle & new creation form mapping state
   const [showModal, setShowModal] = useState(false);
@@ -243,7 +250,6 @@ function MissionPage() {
       });
   };
 
-  // Pre-load your routes table to populate the selector dropdown list
   const fetchRoutes = () => {
     fetch("http://localhost/EcoQuest/api/index.php?endpoint=routes")
       .then((res) => res.json())
@@ -253,7 +259,7 @@ function MissionPage() {
 
   useEffect(() => {
     fetchMissions();
-    fetchRoutes(); // Optional fallback if routes endpoint isn't fully configured
+    fetchRoutes();
   }, []);
 
   const handleCreateChange = (e) => {
@@ -272,7 +278,6 @@ function MissionPage() {
       .then((data) => {
         if (data.success) {
           setShowModal(false);
-          // Reset form keys safely
           setNewMission({
             title: "",
             requirement: "",
@@ -281,7 +286,7 @@ function MissionPage() {
             status: "Active",
             route_id: "",
           });
-          fetchMissions(); // Refresh the list view grid instantly
+          fetchMissions();
         } else {
           alert(data.message || "Failed to submit new database entry.");
         }
@@ -289,25 +294,18 @@ function MissionPage() {
       .catch((err) => console.error("Error creating mission:", err));
   };
 
-  // 4. Dynamic Client-Side Filtering and Searching (Identical approach to your Users Page)
   const filteredMissions = missions.filter((mission) => {
-    // Null safety fallback values to avoid application crashes if columns are empty
     const title = mission.title || "";
-
-    // Check both standard schema column naming variants safely
     const requirement = mission.requirement || mission.description || "";
     const routeName = mission.assigned_route || "";
     const currentStatus = mission.status || "Active";
 
-    // Omni-Search filter logic (Matches Title, Requirement, OR Assigned Route Name)
     const matchesSearch =
       title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       requirement.toLowerCase().includes(searchQuery.toLowerCase()) ||
       routeName.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
-
-    // Pill filter matching logic
     return currentStatus.toLowerCase() === activeFilter.toLowerCase();
   });
 
@@ -410,13 +408,11 @@ function MissionPage() {
                   style={{ width: "100%", padding: "8px", marginTop: "5px" }}
                 >
                   <option value="">Select a Route Path</option>
-                  {/* Map over incoming routes array rows dynamically */}
                   {routes.map((route) => (
                     <option key={route.id} value={route.id}>
                       {route.name}
                     </option>
                   ))}
-                  {/* Static options fallback if routes fetch isn't working yet */}
                   {routes.length === 0 && (
                     <>
                       <option value="1">Coastal Bay Trail</option>
@@ -493,6 +489,160 @@ function MissionPage() {
         </div>
       )}
 
+      {/* --- CENTERED MISSION DETAILS POPUP MODAL --- */}
+      {selectedMission && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setSelectedMission(null)} // Click outside window container to close
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()} // Stop overlay close triggers inside the window
+            style={{
+              backgroundColor: "#fff",
+              padding: "30px",
+              borderRadius: "12px",
+              width: "500px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "15px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "between",
+                alignItems: "center",
+                borderBottom: "1px solid #eee",
+                paddingBottom: "10px",
+              }}
+            >
+              <div>
+                <h2 style={{ margin: 0 }}>
+                  {selectedMission.title || "Untitled Mission"}
+                </h2>
+                <span style={{ fontSize: "0.85rem", color: "#666" }}>
+                  ID: {selectedMission.id ? `MS-${selectedMission.id}` : "N/A"}
+                </span>
+              </div>
+              <span
+                className={`mission-card-badge mission-card-badge-${(selectedMission.status || "Active").toLowerCase()}`}
+                style={{ marginLeft: "auto" }}
+              >
+                {selectedMission.status || "Active"}
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                margin: "10px 0",
+              }}
+            >
+              <div>
+                <strong
+                  style={{
+                    color: "#555",
+                    display: "block",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Assigned Route Path
+                </strong>
+                <p style={{ margin: "4px 0 0 0", fontSize: "1.05rem" }}>
+                  {selectedMission.assigned_route || "Unassigned Route"}
+                </p>
+              </div>
+              <div>
+                <strong
+                  style={{
+                    color: "#555",
+                    display: "block",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Mission Requirement
+                </strong>
+                <p style={{ margin: "4px 0 0 0", fontSize: "1.05rem" }}>
+                  {selectedMission.requirement ||
+                    selectedMission.description ||
+                    "No description provided."}
+                </p>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div>
+                  <strong
+                    style={{
+                      color: "#555",
+                      display: "block",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    Active Schedule Window
+                  </strong>
+                  <p style={{ margin: "4px 0 0 0" }}>
+                    {selectedMission.date_range || "N/A"}
+                  </p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <strong
+                    style={{
+                      color: "#555",
+                      display: "block",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    XP Completion Payout
+                  </strong>
+                  <p
+                    style={{
+                      margin: "4px 0 0 0",
+                      fontWeight: "bold",
+                      color: "#28a745",
+                    }}
+                  >
+                    +{Number(selectedMission.xp_reward || 0).toLocaleString()}{" "}
+                    XP
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                borderTop: "1px solid #eee",
+                paddingTop: "15px",
+              }}
+            >
+              <button
+                type="button"
+                className="mission-button primary"
+                onClick={() => setSelectedMission(null)}
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="mission-grid" aria-label="Mission cards">
         {loading && (
           <p style={{ gridColumn: "1 / -1", padding: "20px" }}>
@@ -524,6 +674,7 @@ function MissionPage() {
               key={mission.id || mission.title}
               mission={mission}
               onSaveSuccess={fetchMissions}
+              onViewDetails={setSelectedMission}
             />
           ))}
       </section>
